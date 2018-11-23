@@ -4,3 +4,10 @@ version = "0.0.1"
 authors = ["Tom Dong <tom.tung.dyb@gmail.com>"]
 
 [dependencies]
+serde = "1.0"
+serde_derive = "1.0"
+bincode = "1.0"
+pbr = "1.0"
+log = "0.4"
+simple_logger = "0.5"
+time = "0.1"
