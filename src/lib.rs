@@ -9,3 +9,5 @@ extern crate log;
 extern crate time;
 
 pub mod data;
+
+pub mod model;
