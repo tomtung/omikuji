@@ -1,3 +1,4 @@
+mod liblinear;
 use crate::data::{Example, Feature, Label, SparseVector};
 use order_stat::kth_by;
 use rand::prelude::*;

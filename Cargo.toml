@@ -14,3 +14,6 @@ time = "0.1"
 rand = "0.6"
 order-stat = "0.1"
 assert_approx_eq = "1.0"
+
+[build-dependencies]
+cc = "1.0"
