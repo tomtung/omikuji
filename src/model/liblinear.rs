@@ -57,8 +57,8 @@ impl Model {
         assert_eq!(feature_vecs.len(), labels.len());
 
         // Used to as inputs into liblinear
-        let mut x_vals = Vec::<Vec<ffi::feature_node>>::new();
-        let mut y_vals = Vec::<c_double>::new();
+        let mut x_vals = Vec::<Vec<ffi::feature_node>>::with_capacity(feature_vecs.len());
+        let mut y_vals = Vec::<c_double>::with_capacity(labels.len());
 
         // Used to reassign indices to features (see below)
         let mut feature_to_index = HashMap::<Feature, c_int>::new();
@@ -70,7 +70,8 @@ impl Model {
 
             // We need to use the smallest possible feature indices to minimize the number of
             // parameters of the liblinear model
-            let mut feature_nodes = Vec::<ffi::feature_node>::new();
+            let mut feature_nodes =
+                Vec::<ffi::feature_node>::with_capacity(feature_vec.entries.len() + 2);
             for &(feature, value) in &feature_vec.entries {
                 let index = *feature_to_index
                     .entry(feature.to_owned())
