@@ -1,6 +1,6 @@
+use hashbrown::HashMap;
 use std;
 use std::cmp::{max, min};
-use std::collections::HashMap;
 use std::hash::{BuildHasher, Hash};
 
 /// Simple sparse vector.

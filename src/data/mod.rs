@@ -1,5 +1,5 @@
+use hashbrown::HashSet;
 use pbr::ProgressBar;
-use std::collections::HashSet;
 use std::fs::File;
 use std::io::prelude::*;
 use std::io::{BufReader, Error, ErrorKind, Result};
@@ -15,7 +15,7 @@ pub type Label = u32;
 #[derive(Clone, Debug, PartialEq)]
 pub struct Example {
     pub features: SparseVector<Feature>,
-    pub labels: Vec<Label>,
+    pub labels: HashSet<Label>,
 }
 
 pub struct DataSet {
@@ -32,11 +32,11 @@ impl DataSet {
     fn parse_xc_repo_data_line(line: &str) -> Result<Example> {
         let mut token_iter = line.split(' ');
 
-        let mut labels = Vec::new();
+        let mut labels = HashSet::new();
         let labels_str = token_iter.next().ok_or(ErrorKind::InvalidData)?;
         for label_str in labels_str.split(',') {
             if !label_str.is_empty() {
-                labels.push(
+                labels.insert(
                     label_str
                         .parse::<Label>()
                         .ok()
@@ -142,7 +142,8 @@ impl DataSplits {
             .map(|s| {
                 s.parse::<usize>()
                     .map_err(|_| Error::from(ErrorKind::InvalidData))
-            }).collect()
+            })
+            .collect()
     }
 
     pub fn parse_xc_repo_data_split_file(path: &str) -> Result<Self> {
@@ -208,12 +209,15 @@ impl DataSplits {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use std::iter::FromIterator;
+
     #[test]
     fn test_parse_xc_repo_data_line() {
         assert_eq!(
             super::Example {
                 features: super::SparseVector::from(vec![(21, 1.), (23, 2.), (24, 3.)]),
-                labels: vec![11, 12],
+                labels: HashSet::from_iter(vec![11, 12]),
             },
             super::DataSet::parse_xc_repo_data_line("11,12 21:1 23:2 24:3").unwrap()
         );

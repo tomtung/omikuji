@@ -12,5 +12,6 @@ fn main() {
             "liblinear/blas/dscal.c",
             "liblinear/tron.cpp",
             "liblinear/linear.cpp",
-        ]).compile("liblinear.a");
+        ])
+        .compile("liblinear.a");
 }

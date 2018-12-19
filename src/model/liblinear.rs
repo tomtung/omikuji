@@ -1,5 +1,5 @@
 use crate::data::{Feature, SparseVector};
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use std::os::raw::{c_char, c_double, c_int};
 use std::ptr;
 use std::slice;
@@ -52,7 +52,7 @@ impl Model {
     pub fn train(
         feature_vecs: &[&SparseVector<Feature>],
         labels: &[bool],
-        hyper_param: TrainHyperParam,
+        hyper_param: &TrainHyperParam,
     ) -> Model {
         assert_eq!(feature_vecs.len(), labels.len());
 
@@ -149,7 +149,8 @@ impl Model {
                         } else {
                             Some((index_to_feature[index + 1], value as f32))
                         }
-                    }).collect::<Vec<_>>(),
+                    })
+                    .collect::<Vec<_>>(),
             );
             let bias = weights_and_bias[n_features] as f32;
 
@@ -189,7 +190,8 @@ mod tests {
             vec![(100, 8.5), (200, -1.1549)],
             vec![(100, 9.3), (200, -0.92082)],
             vec![(100, 12.), (200, -1.22185)],
-        ].into_iter()
+        ]
+        .into_iter()
         .map(|s| SparseVector::<Feature>::from(s))
         .collect::<Vec<_>>();
         let feature_vec_refs = feature_vecs.iter().collect::<Vec<_>>();
@@ -203,7 +205,7 @@ mod tests {
             let model = Model::train(
                 &feature_vec_refs,
                 &labels,
-                TrainHyperParam {
+                &TrainHyperParam {
                     loss_type: LossType::Log,
                     eps: 0.01,
                     C: 1.,
@@ -224,7 +226,7 @@ mod tests {
             let model = Model::train(
                 &feature_vec_refs,
                 &labels,
-                TrainHyperParam {
+                &TrainHyperParam {
                     loss_type: LossType::Log,
                     eps: 0.01,
                     C: 1.,
@@ -242,7 +244,7 @@ mod tests {
             let model = Model::train(
                 &feature_vec_refs,
                 &labels,
-                TrainHyperParam {
+                &TrainHyperParam {
                     loss_type: LossType::Hinge,
                     eps: 0.01,
                     C: 1.,

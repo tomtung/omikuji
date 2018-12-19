@@ -12,6 +12,11 @@ extern crate rand;
 
 extern crate order_stat;
 
+#[macro_use]
+extern crate itertools;
+
+extern crate hashbrown;
+
 #[cfg(test)]
 #[macro_use]
 extern crate assert_approx_eq;

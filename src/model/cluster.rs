@@ -1,7 +1,7 @@
 use crate::data::{Feature, SparseVector};
+use hashbrown::HashMap;
 use order_stat::kth_by;
 use rand::prelude::*;
-use std::collections::HashMap;
 
 fn balanced_2means_iterate(
     vectors: &[&SparseVector<Feature>],
@@ -71,7 +71,7 @@ pub fn balanced_2means(vectors: &[&SparseVector<Feature>], epsilon: f32) -> Vec<
 
     loop {
         let avg_similarity = balanced_2means_iterate(vectors, &mut partitions, &mut centroids);
-        assert!(avg_similarity >= prev_avg_similarity);
+        assert!(avg_similarity + 1e-3 >= prev_avg_similarity);
         // Stop iteration if converged
         if avg_similarity - prev_avg_similarity < epsilon {
             return partitions;
