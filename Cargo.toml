@@ -1,6 +1,7 @@
 [package]
 name = "parabel"
 version = "0.0.1"
+edition = "2018"
 authors = ["Tom Dong <tom.tung.dyb@gmail.com>"]
 
 [dependencies]
