@@ -13,7 +13,7 @@ fn compute_feature_vectors_per_label(
     let mut label_to_feature_to_sum = HashMap::<Label, HashMap<Feature, f32>>::new();
     for example in examples {
         for label in &example.labels {
-            let mut feature_to_sum = label_to_feature_to_sum.entry(label.to_owned()).or_default();
+            let feature_to_sum = label_to_feature_to_sum.entry(label.to_owned()).or_default();
             for (feature, value) in &example.features.entries {
                 *feature_to_sum.entry(feature.to_owned()).or_default() += value;
             }
@@ -112,7 +112,7 @@ impl<'a> TreeTrainer<'a> {
         }
     }
 
-    pub fn train(&self) -> Tree {
+    pub(self) fn train(&self) -> Tree {
         Tree {
             root: self.train_subtree(
                 self.tree_height,
