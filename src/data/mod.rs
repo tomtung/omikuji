@@ -24,7 +24,7 @@ pub struct DataSet {
     pub examples: Vec<Example>,
 }
 
-impl DataSet {
+impl Example {
     /// Parse a line in a data file from the Extreme Classification Repository
     ///
     /// The line should be in the following format:
@@ -69,7 +69,9 @@ impl DataSet {
 
         Ok(Example { features, labels })
     }
+}
 
+impl DataSet {
     /// Load a data file from the Extreme Classification Repository
     pub fn load_xc_repo_data_file(path: &str) -> Result<Self> {
         info!("Loading data from {}", path);
@@ -102,7 +104,7 @@ impl DataSet {
         let mut pb = ProgressBar::on(::std::io::stderr(), n_examples.into());
         let mut examples = Vec::with_capacity(n_examples as usize);
         for line in lines {
-            examples.push(Self::parse_xc_repo_data_line(&line?)?);
+            examples.push(Example::parse_xc_repo_data_line(&line?)?);
             pb.inc();
         }
         examples.shrink_to_fit();
@@ -216,10 +218,10 @@ mod tests {
     fn test_parse_xc_repo_data_line() {
         assert_eq!(
             super::Example {
-                features: super::SparseVector::from(vec![(21, 1.), (23, 2.), (24, 3.)]),
+                features: SparseVector::from(vec![(21, 1.), (23, 2.), (24, 3.)]),
                 labels: HashSet::from_iter(vec![11, 12]),
             },
-            super::DataSet::parse_xc_repo_data_line("11,12 21:1 23:2 24:3").unwrap()
+            Example::parse_xc_repo_data_line("11,12 21:1 23:2 24:3").unwrap()
         );
     }
 
@@ -227,7 +229,7 @@ mod tests {
     fn test_parse_xc_repo_data_split_line() {
         assert_eq!(
             vec![1, 2, 3, 2, 1],
-            super::DataSplits::parse_xc_repo_data_split_line("1 2 3 2 1").unwrap()
+            DataSplits::parse_xc_repo_data_split_line("1 2 3 2 1").unwrap()
         )
     }
 }
