@@ -1,30 +1,34 @@
 use super::{cluster, liblinear, Tree, TreeNode};
-use crate::data::{Example, Feature, Label, SparseVector};
-use hashbrown::{HashMap, HashSet};
-use itertools::Itertools;
+use crate::data::DataSet;
+use crate::mat_util::*;
+use crate::{Index, IndexSet, IndexValueVec, SparseMat, SparseMatView};
+use hashbrown::HashMap;
+use itertools::{izip, Itertools};
+use std::cmp::{max, min};
 use std::iter::FromIterator;
 
-/// Compute average feature vectors for labels in a given dataset, l2-normalized and pruned with
-/// a given threshold.
-fn compute_feature_vectors_per_label(
-    examples: &[Example],
-    threshold: f32,
-) -> (Vec<Label>, Vec<SparseVector<Feature>>) {
-    let mut label_to_feature_to_sum = HashMap::<Label, HashMap<Feature, f32>>::new();
-    for example in examples {
-        for label in &example.labels {
-            let feature_to_sum = label_to_feature_to_sum.entry(label.to_owned()).or_default();
-            for (feature, value) in &example.features.entries {
-                *feature_to_sum.entry(feature.to_owned()).or_default() += value;
+/// Compute centroid feature vectors for labels in a given dataset, pruned with the given threshold.
+///
+/// Assumes that dataset is well-formed.
+fn compute_label_centroids(dataset: &DataSet, threshold: f32) -> (Vec<Index>, Vec<IndexValueVec>) {
+    let mut label_to_feature_to_sum =
+        HashMap::<Index, HashMap<Index, f32>>::with_capacity(dataset.n_labels);
+    for (features, labels) in izip!(&dataset.feature_lists, &dataset.label_sets) {
+        for &label in labels {
+            let feature_to_sum = label_to_feature_to_sum.entry(label).or_default();
+            for &(feature, value) in features {
+                *feature_to_sum.entry(feature).or_default() += value;
             }
         }
     }
+
     label_to_feature_to_sum
         .into_iter()
         .map(|(label, feature_to_sum)| {
-            let mut v = SparseVector::from(feature_to_sum);
+            let mut v = feature_to_sum.into_iter().collect_vec();
             v.l2_normalize();
             v.prune_with_threshold(threshold);
+            v.sort_by_index();
             (label, v)
         })
         .unzip()
@@ -32,33 +36,10 @@ fn compute_feature_vectors_per_label(
 
 #[derive(Copy, Clone, Debug)]
 struct HyperParam {
-    classifier_hyper_param: liblinear::TrainHyperParam,
-    cluster_eps: f32,
-    max_leaf_size: usize,
-}
-
-fn train_leaf_node(
-    examples: &[&Example],
-    labels: &[Label],
-    hyper_param: &liblinear::TrainHyperParam,
-) -> TreeNode {
-    assert!(!examples.is_empty());
-    assert!(!labels.is_empty());
-    let feature_vecs = examples.iter().map(|e| &e.features).collect::<Vec<_>>();
-    let label_classifier_pairs = labels
-        .iter()
-        .map(|label| {
-            let labels = examples
-                .iter()
-                .map(|e| e.labels.contains(label))
-                .collect::<Vec<_>>();
-            let model = liblinear::Model::train(&feature_vecs, &labels, hyper_param);
-            (label.to_owned(), model)
-        })
-        .collect::<Vec<_>>();
-    TreeNode::LeafNode {
-        label_classifier_pairs,
-    }
+    pub max_leaf_size: usize,
+    pub cluster_eps: f32,
+    pub centroid_threshold: f32,
+    pub classifier: liblinear::TrainHyperParam,
 }
 
 /// Determines the height of the tree.
@@ -73,134 +54,235 @@ fn compute_tree_height(n_labels: usize, max_leaf_size: usize) -> usize {
 }
 
 pub struct TreeTrainer<'a> {
-    examples: Vec<&'a Example>,
-    labels: Vec<Label>,
-    label_centroids: Vec<SparseVector<Feature>>,
+    example_feature_matrix: SparseMat,
+    example_labels: Vec<&'a IndexSet>,
+    all_labels: Vec<Index>,
+    label_centroid_matrix: SparseMat,
     tree_height: usize,
-    cluster_eps: f32,
-    max_leaf_size: usize,
-    classifier_hyper_param: liblinear::TrainHyperParam,
+    hyper_param: HyperParam,
 }
 
 impl<'a> TreeTrainer<'a> {
-    pub fn initialize(
-        examples: &'a [Example],
-        centroid_threshold: f32,
-        cluster_eps: f32,
-        max_leaf_size: usize,
-        classifier_loss_type: super::liblinear::LossType,
-        classifier_eps: f32,
-        classifier_c: f32,
-        classifier_weight_threshold: f32,
-    ) -> Self {
-        let (labels, label_centroids) =
-            compute_feature_vectors_per_label(&examples, centroid_threshold);
-        let tree_height = compute_tree_height(labels.len(), max_leaf_size);
+    /// Initialize a reusable tree trainer with the dataset and hyper-parameters.
+    ///
+    /// Dataset is assumed to be well-formed.
+    pub(self) fn initialize(dataset: &'a DataSet, hyper_param: HyperParam) -> Self {
+        assert_eq!(dataset.feature_lists.len(), dataset.label_sets.len());
+        let example_feature_matrix = dataset
+            .feature_lists
+            .copy_to_csrmat(dataset.n_features, Some(1.));
+        let example_labels = dataset.label_sets.iter().collect_vec();
+        let (all_labels, label_centroids) =
+            compute_label_centroids(&dataset, hyper_param.centroid_threshold);
+        let label_centroid_matrix = label_centroids.copy_to_csrmat(dataset.n_features, None);
+        let tree_height = compute_tree_height(all_labels.len(), hyper_param.max_leaf_size);
         Self {
-            examples: examples.iter().collect_vec(),
-            labels,
-            label_centroids,
+            example_feature_matrix,
+            example_labels,
+            all_labels,
+            label_centroid_matrix,
             tree_height,
-            cluster_eps,
-            max_leaf_size,
-            classifier_hyper_param: liblinear::TrainHyperParam {
-                loss_type: classifier_loss_type,
-                eps: classifier_eps,
-                C: classifier_c,
-                weight_threshold: classifier_weight_threshold,
-            },
+            hyper_param,
         }
     }
 
     pub(self) fn train(&self) -> Tree {
+        let identity_map = (0..self.example_feature_matrix.cols() as Index).collect_vec();
         Tree {
             root: self.train_subtree(
                 self.tree_height,
-                &self.examples,
-                &self.labels,
-                &self.label_centroids.iter().collect_vec(),
+                (
+                    self.example_feature_matrix.view(),
+                    &self.example_labels,
+                    &identity_map,
+                ),
+                (&self.all_labels, self.label_centroid_matrix.view()),
             ),
         }
+    }
+
+    fn train_leaf_node(
+        &self,
+        (example_feature_matrix, example_labels, col_index_to_feature): (
+            SparseMatView,
+            &[&IndexSet],
+            &[Index],
+        ),
+        leaf_labels: &[Index],
+    ) -> TreeNode {
+        let n_examples = example_feature_matrix.rows();
+        assert_eq!(n_examples, example_labels.len());
+        assert!(n_examples > 0);
+        TreeNode::LeafNode {
+            label_classifier_pairs: leaf_labels
+                .iter()
+                .map(|&leaf_label| {
+                    let labels = example_labels
+                        .iter()
+                        .map(|example_labels| example_labels.contains(&leaf_label))
+                        .collect_vec();
+
+                    let classifier = liblinear::Model::train(
+                        &example_feature_matrix,
+                        &labels,
+                        &self
+                            .hyper_param
+                            .classifier
+                            .adapt_to_sample_size(n_examples, self.example_feature_matrix.rows()),
+                    )
+                    .remap_features_indices(
+                        col_index_to_feature,
+                        self.example_feature_matrix.cols(),
+                    );
+                    (leaf_label, classifier)
+                })
+                .collect(),
+        }
+    }
+
+    fn split_branch(
+        &self,
+        labels: &[Index],
+        label_centroid_matrix: &SparseMatView,
+    ) -> Vec<(Vec<Index>, SparseMat)> {
+        let n_labels = labels.len();
+        assert!(n_labels > 1);
+        assert_eq!(n_labels, label_centroid_matrix.rows());
+
+        let label_assignments =
+            cluster::balanced_2means(&label_centroid_matrix, self.hyper_param.cluster_eps);
+        assert_eq!(n_labels, label_assignments.len());
+
+        let (true_indices, false_indices) =
+            (0..n_labels).partition::<Vec<_>, _>(|&i| label_assignments[i]);
+        assert!(
+            max(true_indices.len(), false_indices.len())
+                - min(true_indices.len(), false_indices.len())
+                <= 1
+        );
+        [true_indices, false_indices]
+            .iter()
+            .map(|indices| {
+                let split_labels = indices.iter().map(|&i| labels[i]).collect_vec();
+                let (split_centroid_matrix, _) =
+                    shrink_column_indices(label_centroid_matrix.copy_outer_dims(indices));
+                (split_labels, split_centroid_matrix)
+            })
+            .collect()
+    }
+
+    fn find_examples_with_labels(
+        example_labels: &[&IndexSet],
+        split_labels: &[Index],
+    ) -> Vec<usize> {
+        // An example belongs to the current split if it has any of the split labels
+        let split_label_set = IndexSet::from_iter(split_labels.iter().cloned());
+        example_labels
+            .iter()
+            .enumerate()
+            .filter_map(|(i, labels)| {
+                if labels.is_disjoint(&split_label_set) {
+                    None
+                } else {
+                    Some(i)
+                }
+            })
+            .collect_vec()
+    }
+
+    fn train_branch_split_classifier(
+        &self,
+        example_feature_matrix: &SparseMatView,
+        split_example_indices: &[usize],
+    ) -> liblinear::Model {
+        let n_examples = example_feature_matrix.rows();
+        let mut example_in_split = vec![false; example_feature_matrix.rows()];
+        for &i in split_example_indices {
+            example_in_split[i] = true;
+        }
+
+        liblinear::Model::train(
+            &example_feature_matrix,
+            &example_in_split,
+            &self
+                .hyper_param
+                .classifier
+                .adapt_to_sample_size(n_examples, self.example_feature_matrix.rows()),
+        )
     }
 
     fn train_subtree(
         &self,
         height: usize,
-        examples: &[&Example],
-        labels: &[Label],
-        label_centroids: &[&SparseVector<Feature>],
+        (example_feature_matrix, example_labels, col_index_to_feature): (
+            SparseMatView,
+            &[&IndexSet],
+            &[Index],
+        ),
+        (subtree_labels, subtree_label_centroid_matrix): (&[Index], SparseMatView),
     ) -> TreeNode {
-        assert!(!examples.is_empty());
-        assert!(!labels.is_empty());
+        assert_eq!(example_feature_matrix.rows(), example_labels.len());
+        assert!(example_feature_matrix.rows() > 0);
 
         // If reached maximum depth, build and return a leaf node
         if height == 0 {
-            assert!(labels.len() <= self.max_leaf_size);
-            return train_leaf_node(examples, labels, &self.classifier_hyper_param);
+            assert!(subtree_labels.len() <= self.hyper_param.max_leaf_size);
+            return self.train_leaf_node(
+                (example_feature_matrix, example_labels, col_index_to_feature),
+                subtree_labels,
+            );
         }
 
-        // Split labels into 2 sets by clustering
-        assert!(labels.len() > 1);
-        let mut label_splits = [
-            (
-                Vec::<Label>::with_capacity(labels.len() / 2 + 1),
-                Vec::<&SparseVector<Feature>>::with_capacity(labels.len() / 2 + 1),
-            ),
-            (
-                Vec::<Label>::with_capacity(labels.len() / 2 + 1),
-                Vec::<&SparseVector<Feature>>::with_capacity(labels.len() / 2 + 1),
-            ),
-        ];
-        for (&label, centroid, assignment) in izip!(
-            labels,
-            label_centroids,
-            cluster::balanced_2means(label_centroids, self.cluster_eps)
-        ) {
-            let (split_labels, split_centroids) = &mut label_splits[assignment as usize];
-            split_labels.push(label);
-            split_centroids.push(centroid);
-        }
+        let mut child_classifier_pairs = self
+            .split_branch(subtree_labels, &subtree_label_centroid_matrix)
+            .into_iter()
+            .map(|(split_labels, split_label_centroid_matrix)| {
+                let split_example_indices =
+                    Self::find_examples_with_labels(example_labels, &split_labels);
 
-        // For each split, train an example classifier and recursively train a subtree
-        let example_feature_vecs = examples.iter().map(|e| &e.features).collect::<Vec<_>>();
-        let mut node_model_pairs = label_splits
-            .iter()
-            .map(|(split_labels, split_centroids)| {
-                // An example belongs to the current split if it has any of the split labels
-                let mut split_examples = Vec::<&Example>::with_capacity(examples.len());
-                let mut example_in_split = vec![false; examples.len()];
-                let split_label_set = HashSet::<Label>::from_iter(split_labels.iter().cloned());
-                for (i, &example) in examples.iter().enumerate() {
-                    if !example.labels.is_disjoint(&split_label_set) {
-                        example_in_split[i] = true;
-                        split_examples.push(example);
-                    }
-                }
-
-                // Train a classifier that predicts whether an example belongs to the current split
-                let model = liblinear::Model::train(
-                    &example_feature_vecs,
-                    &example_in_split,
-                    &self.classifier_hyper_param,
-                );
+                let classifier = self
+                    .train_branch_split_classifier(&example_feature_matrix, &split_example_indices)
+                    .remap_features_indices(
+                        col_index_to_feature,
+                        self.example_feature_matrix.cols(),
+                    );
 
                 // Train a subtree for the current split
-                let subtree =
-                    self.train_subtree(height - 1, &split_examples, split_labels, split_centroids);
+                let subtree = {
+                    let (split_example_feature_matrix, mut new_index_to_old) =
+                        shrink_column_indices(
+                            example_feature_matrix.copy_outer_dims(&split_example_indices),
+                        );
+                    for index in &mut new_index_to_old {
+                        *index = col_index_to_feature[*index as usize];
+                    }
 
-                (Box::new(subtree), model)
+                    let split_examples_labels = split_example_indices
+                        .iter()
+                        .map(|&i| example_labels[i])
+                        .collect_vec();
+
+                    self.train_subtree(
+                        height - 1,
+                        (
+                            split_example_feature_matrix.view(),
+                            &split_examples_labels,
+                            &new_index_to_old,
+                        ),
+                        (&split_labels, split_label_centroid_matrix.view()),
+                    )
+                };
+
+                (Box::new(subtree), classifier)
             })
-            .collect::<Vec<_>>();
+            .collect_vec();
 
-        // Convert to fixed-length array
-        assert_eq!(2, node_model_pairs.len());
-        let child_classifier_pairs = [
-            node_model_pairs.pop().unwrap(),
-            node_model_pairs.pop().unwrap(),
-        ];
-
+        assert_eq!(2, child_classifier_pairs.len());
         TreeNode::BranchNode {
-            child_classifier_pairs,
+            child_classifier_pairs: [
+                child_classifier_pairs.pop().unwrap(),
+                child_classifier_pairs.pop().unwrap(),
+            ],
         }
     }
 }
@@ -211,58 +293,56 @@ mod tests {
     use std::iter::FromIterator;
 
     #[test]
-    fn test_compute_label_vectors() {
-        let examples = vec![
-            Example {
-                features: SparseVector::from(vec![(0, 1.), (2, 2.)]),
-                labels: HashSet::from_iter(vec![0, 1]),
-            },
-            Example {
-                features: SparseVector::from(vec![(1, 1.), (3, 2.)]),
-                labels: HashSet::from_iter(vec![0, 2]),
-            },
-            Example {
-                features: SparseVector::from(vec![(0, 1.), (3, 2.)]),
-                labels: HashSet::from_iter(vec![1, 2]),
-            },
-        ];
+    fn test_compute_label_centroids() {
+        let dataset = DataSet {
+            n_features: 4,
+            n_labels: 3,
+            feature_lists: vec![
+                vec![(0, 1.), (2, 2.)],
+                vec![(1, 1.), (3, 2.)],
+                vec![(0, 1.), (3, 2.)],
+            ],
+            label_sets: vec![
+                IndexSet::from_iter(vec![0, 1]),
+                IndexSet::from_iter(vec![0, 2]),
+                IndexSet::from_iter(vec![1, 2]),
+            ],
+        };
 
-        let (labels, vecs) = compute_feature_vectors_per_label(&examples, 1. / 18f32.sqrt() + 1e-4);
+        let (labels, vecs) = compute_label_centroids(&dataset, 1. / 18f32.sqrt() + 1e-4);
         assert_eq!(
-            HashMap::<Label, SparseVector<Feature>>::from_iter(
+            HashMap::<Index, IndexValueVec>::from_iter(
                 vec![
                     (
                         0,
-                        SparseVector::from(vec![
+                        vec![
                             (0, 1. / 10f32.sqrt()),
                             (1, 1. / 10f32.sqrt()),
                             (2, 2. / 10f32.sqrt()),
                             (3, 2. / 10f32.sqrt()),
-                        ])
+                        ]
                     ),
                     (
                         1,
-                        SparseVector::from(vec![
+                        vec![
                             (0, 2. / 12f32.sqrt()),
                             (2, 2. / 12f32.sqrt()),
                             (3, 2. / 12f32.sqrt()),
-                        ])
+                        ]
                     ),
                     (
                         2,
-                        SparseVector::from(vec![
+                        vec![
                             // The first two entries are pruned by the given threshold
                             // (0, 1. / 18f32.sqrt()),
                             // (1, 1. / 18f32.sqrt()),
                             (3, 4. / 18f32.sqrt()),
-                        ])
+                        ]
                     ),
                 ]
                 .into_iter()
             ),
-            HashMap::<Label, SparseVector<Feature>>::from_iter(
-                labels.into_iter().zip(vecs.into_iter())
-            )
+            HashMap::<Index, IndexValueVec>::from_iter(labels.into_iter().zip(vecs.into_iter()))
         );
     }
 

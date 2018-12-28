@@ -5,8 +5,7 @@ edition = "2018"
 authors = ["Tom Dong <tom.tung.dyb@gmail.com>"]
 
 [dependencies]
-serde = "1.0"
-serde_derive = "1.0"
+serde = { version = '1.0', features = ['derive'] }
 bincode = "1.0"
 pbr = "1.0"
 log = "0.4"
@@ -17,6 +16,12 @@ order-stat = "0.1"
 assert_approx_eq = "1.0"
 itertools = "0.7"
 hashbrown = "0.1"
+num-traits = "0.2"
+bit-set = "0.5"
+# A temporary fork with some customizations; hope to merge to upstream eventually
+sprs = { git = "https://github.com/tomtung/sprs.git", branch = "master" }
+# To stay consistent with sprs
+ndarray = "0.11.2"
 
 [build-dependencies]
 cc = "1.0"

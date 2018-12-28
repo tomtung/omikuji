@@ -1,28 +1,13 @@
 #![allow(dead_code)]
 
-#[macro_use]
-extern crate serde_derive;
-
-extern crate pbr;
-
-#[macro_use]
-extern crate log;
-
-extern crate time;
-
-extern crate rand;
-
-extern crate order_stat;
-
-#[macro_use]
-extern crate itertools;
-
-extern crate hashbrown;
-
-#[cfg(test)]
-#[macro_use]
-extern crate assert_approx_eq;
+pub type Index = u32;
+pub type IndexValueVec = Vec<(Index, f32)>;
+pub type IndexSet = hashbrown::HashSet<Index>;
+pub type SparseVec = sprs::CsVecI<f32, Index>;
+pub type SparseVecView<'a> = sprs::CsVecViewI<'a, f32, Index>;
+pub type SparseMat = sprs::CsMatI<f32, Index>;
+pub type SparseMatView<'a> = sprs::CsMatViewI<'a, f32, Index>;
 
 pub mod data;
-
+mod mat_util;
 pub mod model;

@@ -2,8 +2,9 @@ mod cluster;
 mod liblinear;
 mod train;
 
-use crate::data::{Feature, Label, SparseVector};
+use crate::{Index, IndexValueVec, SparseVecView};
 use itertools::Itertools;
+use serde::{Deserialize, Serialize};
 use std::mem::swap;
 
 struct Tree {
@@ -16,7 +17,7 @@ enum TreeNode {
         child_classifier_pairs: [(Box<TreeNode>, liblinear::Model); 2],
     },
     LeafNode {
-        label_classifier_pairs: Vec<(Label, liblinear::Model)>,
+        label_classifier_pairs: Vec<(Index, liblinear::Model)>,
     },
 }
 
@@ -31,11 +32,7 @@ impl TreeNode {
 }
 
 impl Tree {
-    pub fn predict(
-        &self,
-        feature_vec: &SparseVector<Feature>,
-        beam_size: usize,
-    ) -> Vec<(Label, f32)> {
+    pub fn predict(&self, feature_vec: SparseVecView, beam_size: usize) -> IndexValueVec {
         assert!(beam_size > 0);
 
         let mut curr_level = Vec::<(&TreeNode, f32)>::with_capacity(beam_size * 2);
@@ -93,6 +90,6 @@ impl Tree {
             .collect_vec();
         label_score_pairs
             .sort_unstable_by(|(_, score1), (_, score2)| score2.partial_cmp(score1).unwrap());
-        return label_score_pairs;
+        label_score_pairs
     }
 }
