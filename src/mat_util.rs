@@ -186,6 +186,18 @@ where
     }
 }
 
+pub fn csvec_dot_self<N, I>(vec: &CsVecViewI<N, I>) -> N
+where
+    I: SpIndex,
+    N: Num + AddAssign + Copy,
+{
+    let mut prod = N::zero();
+    for &val in vec.data() {
+        prod += val * val;
+    }
+    prod
+}
+
 /// Remap column indices according to the given mapping.
 ///
 /// The mapping is assumed to be well-formed, i.e. sorted, within range, and without duplicates.
@@ -269,7 +281,27 @@ where
 {
     assert_eq!(dense_vec.len(), csvec.dim());
     for (i, &v) in csvec.iter() {
-        dense_vec[[i]] += v;
+        // This is safe because we checked length above
+        unsafe {
+            *dense_vec.uget_mut(i) += v;
+        }
+    }
+}
+
+pub fn dense_add_assign_csvec_mul_scalar<N, I>(
+    mut dense_vec: ArrayViewMut1<N>,
+    csvec: CsVecViewI<N, I>,
+    scalar: N,
+) where
+    I: sprs::SpIndex,
+    N: Num + Copy + AddAssign,
+{
+    assert_eq!(dense_vec.len(), csvec.dim());
+    for (i, &v) in csvec.iter() {
+        // This is safe because we checked length above
+        unsafe {
+            *dense_vec.uget_mut(i) += v * scalar;
+        }
     }
 }
 
@@ -453,6 +485,14 @@ mod tests {
         let sparse = CsVecI::new(5, vec![1, 3], vec![6, 7]);
         dense_add_assign_csvec(dense.view_mut(), sparse.view());
         assert_eq!(array![1, 2 + 6, 3, 4 + 7, 5], dense);
+    }
+
+    #[test]
+    fn test_dense_add_assign_csvec_mul_scalar() {
+        let mut dense = array![1, 2, 3, 4, 5];
+        let sparse = CsVecI::new(5, vec![1, 3], vec![6, 7]);
+        dense_add_assign_csvec_mul_scalar(dense.view_mut(), sparse.view(), 2);
+        assert_eq!(array![1, 2 + 6 * 2, 3, 4 + 7 * 2, 5], dense);
     }
 
     #[test]

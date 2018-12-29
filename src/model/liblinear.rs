@@ -1,13 +1,13 @@
 use crate::mat_util::*;
 use crate::{Index, SparseMatView, SparseVec, SparseVecView};
-use itertools::izip;
+use itertools::Itertools;
+use ndarray::Array1;
+use rand::prelude::*;
 use serde::{Deserialize, Serialize};
-use std::os::raw::{c_char, c_double, c_int};
-use std::ptr;
-use std::slice;
+use std::f32::{INFINITY, NEG_INFINITY};
 
 /// The loss function used by liblinear model.
-#[derive(Copy, Clone, Debug, Serialize, Deserialize)]
+#[derive(Eq, PartialEq, Copy, Clone, Debug, Serialize, Deserialize)]
 pub enum LossType {
     /// Log loss: min_w w^Tw/2 + C \sum log(1 + exp(-y_i w^Tx_i))
     Log,
@@ -44,13 +44,6 @@ pub struct Model {
     loss_type: LossType,
 }
 
-/// Mute prints from liblinear.
-pub fn mute_liblinear_print() {
-    unsafe {
-        ffi::set_print_string_function(ffi::print_null);
-    }
-}
-
 impl Model {
     /// Remap indices of weight vector.
     ///
@@ -62,8 +55,6 @@ impl Model {
     }
 
     /// Compute score for a given example.
-    ///
-    /// Note: the last element of feature vector is assumed to be a bias term with value 1.
     pub fn predict_score(&self, feature_vec: SparseVecView) -> f32 {
         let p = self.weights.dot(feature_vec);
         match self.loss_type {
@@ -73,8 +64,6 @@ impl Model {
     }
 
     /// Train a binary classifier with liblinear.
-    ///
-    /// Note: the last column of feature matrix is assumed to be bias terms with value 1.
     pub fn train(
         feature_matrix: &SparseMatView,
         labels: &[bool],
@@ -83,275 +72,301 @@ impl Model {
         assert!(feature_matrix.is_csr());
         assert_eq!(feature_matrix.outer_dims(), labels.len());
 
-        // Used to as inputs into liblinear
-        let mut x_vals = Vec::<Vec<ffi::feature_node>>::with_capacity(feature_matrix.outer_dims());
-        let mut y_vals = Vec::<c_double>::with_capacity(labels.len());
+        let solver = match hyper_param.loss_type {
+            LossType::Hinge => solve_l2r_l2_svc,
+            LossType::Log => solve_l2r_lr_dual,
+        };
 
-        for (feature_vec, &label) in izip!(feature_matrix.outer_iterator(), labels) {
-            // For binary classification, liblinear treats +1 as positive and -1 as negative
-            y_vals.push(if label { 1. } else { -1. });
+        let weights = {
+            let (indices, values) = solver(
+                feature_matrix,
+                labels,
+                hyper_param.eps,
+                hyper_param.C,
+                hyper_param.C,
+                20,
+            )
+            .indexed_iter()
+            .filter_map(|(index, &value)| {
+                // TODO I think there's a function for doing this?
+                if value.abs() <= hyper_param.weight_threshold {
+                    None
+                } else {
+                    Some((index as Index, value))
+                }
+            })
+            .unzip();
+            SparseVec::new(feature_matrix.cols(), indices, values)
+        };
 
-            // We need to use the smallest possible feature indices to minimize the number of
-            // parameters of the liblinear model
-            let mut feature_nodes = Vec::<ffi::feature_node>::with_capacity(feature_vec.nnz() + 1);
-            for (feature, &value) in feature_vec.iter() {
-                let index = (feature + 1) as c_int; // Index starts at 1
-                let value = c_double::from(value);
-                feature_nodes.push(ffi::feature_node { index, value });
+        Model {
+            weights,
+            loss_type: hyper_param.loss_type,
+        }
+    }
+}
+
+/// A coordinate descent solver for L2-loss SVM dual problems.
+///
+/// This is pretty much a line-by-line port from liblinear (with some simplification) to avoid
+/// unnecessary ffi-related overhead.
+///
+///  min_\alpha  0.5(\alpha^T (Q + D)\alpha) - e^T \alpha,
+///    s.t.      0 <= \alpha_i <= upper_bound_i,
+///
+///  where Qij = yi yj xi^T xj and
+///  D is a diagonal matrix
+///
+/// In L1-SVM case (omitted):
+/// 		upper_bound_i = Cp if y_i = 1
+/// 		upper_bound_i = Cn if y_i = -1
+/// 		D_ii = 0
+/// In L2-SVM case:
+/// 		upper_bound_i = INF
+/// 		D_ii = 1/(2*Cp)	if y_i = 1
+/// 		D_ii = 1/(2*Cn)	if y_i = -1
+///
+/// Given:
+/// x, y, Cp, Cn
+/// eps is the stopping tolerance
+///
+/// See Algorithm 3 of Hsieh et al., ICML 2008.
+#[allow(clippy::many_single_char_names)]
+fn solve_l2r_l2_svc(
+    x: &SparseMatView,
+    y: &[bool],
+    eps: f32,
+    cp: f32,
+    cn: f32,
+    max_iter: u32,
+) -> Array1<f32> {
+    assert!(x.is_csr());
+    assert_eq!(x.rows(), y.len());
+
+    let l = x.rows();
+    let w_size = x.cols();
+    let mut w = Array1::<f32>::zeros(w_size);
+
+    let mut active_size = l;
+
+    // PG: projected gradient, for shrinking and stopping
+    let mut pg: f32;
+    let mut pgmax_old = INFINITY;
+    let mut pgmax_new: f32;
+    let mut pgmin_new: f32;
+
+    // default solver_type: L2R_L2LOSS_SVC_DUAL
+    let diag: [f32; 2] = [0.5 / cn, 0.5 / cp];
+
+    // Note that 0 <= alpha[i] <= upper_bound[y[i]]
+    let mut alpha = vec![0.; l];
+
+    let mut index = (0..l).collect_vec();
+    let qd = x
+        .outer_iterator()
+        .zip(y.iter())
+        .map(|(xi, &yi)| diag[yi as usize] + csvec_dot_self(&xi))
+        .collect_vec();
+
+    let mut iter = 0;
+    let mut rng = thread_rng();
+    while iter < max_iter {
+        pgmax_new = NEG_INFINITY;
+        pgmin_new = INFINITY;
+
+        index.shuffle(&mut rng);
+
+        let mut s = 0;
+        while s < active_size {
+            let i = index[s];
+            let yi = y[i];
+            let yi_sign = if yi { 1. } else { -1. };
+            let xi = x.outer_view(i).unwrap();
+            let alpha_i = &mut alpha[i];
+
+            let g = yi_sign * xi.dot_dense(w.view()) - 1. + *alpha_i * diag[yi as usize];
+
+            pg = 0.;
+            if *alpha_i == 0. {
+                if g > pgmax_old {
+                    active_size -= 1;
+                    index.swap(s, active_size);
+                    continue;
+                } else if g < 0. {
+                    pg = g;
+                }
+            } else {
+                pg = g;
             }
-            feature_nodes.push(ffi::feature_node {
-                index: -1,
-                value: 0.,
-            });
-            x_vals.push(feature_nodes);
+
+            pgmax_new = pgmax_new.max(pg);
+            pgmin_new = pgmin_new.min(pg);
+
+            if pg.abs() > 1e-12 {
+                let alpha_old = *alpha_i;
+                *alpha_i = (*alpha_i - g / qd[i]).max(0.);
+                let d = (*alpha_i - alpha_old) * yi_sign;
+                dense_add_assign_csvec_mul_scalar(w.view_mut(), xi, d);
+            }
+
+            s += 1;
         }
 
-        assert_eq!(x_vals.len(), feature_matrix.outer_dims());
-        assert_eq!(y_vals.len(), feature_matrix.outer_dims());
+        iter += 1;
 
-        // Construct input problem & parameter for liblinear
-        let x_ptrs: Vec<_> = x_vals.iter().map(|v| v.as_ptr()).collect();
-        let prob = ffi::problem {
-            l: feature_matrix.outer_dims() as c_int,
-            n: feature_matrix.cols() as c_int, // Already includes bias term
-            y: y_vals.as_ptr(),
-            x: x_ptrs.as_ptr(),
-            bias: 1.,
-        };
+        if pgmax_new - pgmin_new <= eps {
+            if active_size == l {
+                break;
+            } else {
+                active_size = l;
+                pgmax_old = INFINITY;
+                continue;
+            }
+        }
+        pgmax_old = pgmax_new;
+        if pgmax_old <= 0. {
+            pgmax_old = INFINITY;
+        }
+    }
 
-        let param = ffi::parameter {
-            solver_type: match hyper_param.loss_type {
-                LossType::Log => ffi::L2R_LR,
-                LossType::Hinge => ffi::L2R_L2LOSS_SVC,
-            },
-            eps: c_double::from(hyper_param.eps),
-            C: c_double::from(hyper_param.C),
-            nr_weight: 0,
-            weight_label: ptr::null(),
-            weight: ptr::null(),
-            p: 0.,
-            init_sol: ptr::null(),
-        };
+    w
+}
 
-        mute_liblinear_print();
-        unsafe {
-            // Call liblinear to train the model
-            assert!(ffi::check_parameter(&prob, &param).is_null());
-            let mut p_model = ffi::train(&prob, &param);
+/// A coordinate descent solver for the dual of L2-regularized logistic regression problems.
+///
+/// This is pretty much a line-by-line port from liblinear (with some simplification) to avoid
+/// unnecessary ffi-related overhead.
+///
+///  min_\alpha  0.5(\alpha^T Q \alpha) + \sum \alpha_i log (\alpha_i) + (upper_bound_i - \alpha_i) log (upper_bound_i - \alpha_i),
+///    s.t.      0 <= \alpha_i <= upper_bound_i,
+///
+///  where Qij = yi yj xi^T xj and
+///  upper_bound_i = Cp if y_i = 1
+///  upper_bound_i = Cn if y_i = -1
+///
+/// Given:
+/// x, y, Cp, Cn
+/// eps is the stopping tolerance
+///
+/// See Algorithm 5 of Yu et al., MLJ 2010.
+#[allow(clippy::many_single_char_names)]
+fn solve_l2r_lr_dual(
+    x: &SparseMatView,
+    y: &[bool],
+    eps: f32,
+    cp: f32,
+    cn: f32,
+    max_iter: u32,
+) -> Array1<f32> {
+    assert!(x.is_csr());
+    assert_eq!(x.rows(), y.len());
 
-            assert_eq!(2, (*p_model).nr_class);
-            assert_eq!([1, -1], slice::from_raw_parts((*p_model).label, 2));
-            assert_eq!((feature_matrix.cols() - 1) as c_int, (*p_model).nr_feature);
+    let l = x.rows();
+    let w_size = x.cols();
 
-            // Collect resulting weights and bias
-            let weights = {
-                let (indices, values) = slice::from_raw_parts((*p_model).w, feature_matrix.cols())
-                    .iter()
-                    .take(feature_matrix.cols())
-                    .enumerate()
-                    .filter_map(|(index, &value)| {
-                        if value.abs() <= c_double::from(hyper_param.weight_threshold) {
-                            None
-                        } else {
-                            Some((index as u32, value as f32))
-                        }
-                    })
-                    .unzip();
+    let max_inner_iter = 100; // for inner Newton
+    let mut innereps = 1e-2;
+    let innereps_min = eps.min(1e-8);
+    let upper_bound = [cn, cp];
 
-                SparseVec::new(feature_matrix.cols(), indices, values)
+    // store alpha and C - alpha. Note that
+    // 0 < alpha[i] < upper_bound[GETI(i)]
+    // alpha[2*i] + alpha[2*i+1] = upper_bound[GETI(i)]
+    let mut alpha = y
+        .iter()
+        .flat_map(|&yi| {
+            let c = upper_bound[yi as usize];
+            let alpha = (0.001 * c).min(1e-8);
+            vec![alpha, c - alpha]
+        })
+        .collect_vec();
+
+    let xtx = x
+        .outer_iterator()
+        .map(|xi| csvec_dot_self(&xi))
+        .collect_vec();
+
+    let mut w = Array1::<f32>::zeros(w_size);
+    for (i, (xi, &yi)) in x.outer_iterator().zip(y.iter()).enumerate() {
+        let yi_sign = if yi { 1. } else { -1. };
+        dense_add_assign_csvec_mul_scalar(w.view_mut(), xi, yi_sign * alpha[2 * i]);
+    }
+
+    let mut index = (0..l).collect_vec();
+
+    let mut iter = 0;
+    let mut rng = thread_rng();
+    while iter < max_iter {
+        index.shuffle(&mut rng);
+        let mut newton_iter = 0;
+        let mut gmax = 0f32;
+        for &i in &index {
+            let yi = y[i];
+            let yi_sign = if yi { 1. } else { -1. };
+            let c = upper_bound[yi as usize];
+            let xi = x.outer_view(i).unwrap();
+            let a = xtx[i];
+            let b = yi_sign * xi.dot_dense(w.view());
+
+            // Decide to minimize g_1(z) or g_2(z)
+            let (ind1, ind2, sign) = if 0.5 * a * (alpha[2 * i + 1] - alpha[2 * i]) + b < 0. {
+                (2 * i + 1, 2 * i, -1.)
+            } else {
+                (2 * i, 2 * i + 1, 1.)
             };
 
-            // Free liblinear model memory before we go
-            ffi::free_and_destroy_model(&mut p_model);
+            //  g_t(z) = z*log(z) + (C-z)*log(C-z) + 0.5a(z-alpha_old)^2 + sign*b(z-alpha_old)
+            let alpha_old = alpha[ind1];
+            let mut z = if c - alpha_old < 0.5 * c {
+                0.1 * alpha_old
+            } else {
+                alpha_old
+            };
+            let mut gp = a * (z - alpha_old) + sign * b + (z / (c - z)).ln();
+            gmax = gmax.max(gp.abs());
 
-            Model {
-                weights,
-                loss_type: hyper_param.loss_type,
+            // Newton method on the sub-problem
+            let eta = 0.1; // xi in the paper
+            let mut inner_iter = 0;
+            while inner_iter <= max_inner_iter {
+                if gp.abs() < innereps {
+                    break;
+                }
+                let gpp = a + c / (c - z) / z;
+                let tmpz = z - gp / gpp;
+                if tmpz <= 0. {
+                    z *= eta;
+                } else {
+                    // tmpz in (0, C)
+                    z = tmpz;
+                }
+                gp = a * (z - alpha_old) + sign * b + (z / (c - z)).ln();
+                newton_iter += 1;
+                inner_iter += 1;
+            }
+
+            if inner_iter > 0 {
+                // update w
+                alpha[ind1] = z;
+                alpha[ind2] = c - z;
+                dense_add_assign_csvec_mul_scalar(
+                    w.view_mut(),
+                    xi,
+                    sign * (z - alpha_old) * yi_sign,
+                );
             }
         }
-    }
-}
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use assert_approx_eq::assert_approx_eq;
+        iter += 1;
 
-    #[test]
-    fn test_train_and_predict() {
-        let feature_matrix = vec![
-            vec![(200, 0.47712)],
-            vec![(100, 2.1), (200, 0.30103)],
-            vec![(100, 3.4), (200, 0.34242)],
-            vec![(100, 4.5), (200, 0.27875)],
-            vec![(100, 5.), (200, 0.27875)],
-            vec![(100, 1.7), (200, 0.30103)],
-            vec![(100, 2.2), (200, 0.4624)],
-            vec![(100, 4.), (200, 0.50515)],
-            vec![(100, 10.), (200, -1.52288)],
-            vec![(100, 9.), (200, -1.30103)],
-            vec![(100, 10.5), (200, -1.04576)],
-            vec![(100, 8.7), (200, -1.1549)],
-            vec![(100, 7.1), (200, -0.82391)],
-            vec![(100, 9.), (200, -1.39794)],
-            vec![(100, 8.5), (200, -1.1549)],
-            vec![(100, 9.3), (200, -0.92082)],
-            vec![(100, 12.), (200, -1.22185)],
-        ]
-        .copy_to_csrmat(201, Some(1.));
-        let labels = [
-            false, false, false, false, false, false, false, false, true, true, true, true, true,
-            true, true, true, true,
-        ];
-
-        // Log loss
-        {
-            let model = Model::train(
-                &feature_matrix.view(),
-                &labels,
-                &TrainHyperParam {
-                    loss_type: LossType::Log,
-                    eps: 0.01,
-                    C: 1.,
-                    weight_threshold: 0.,
-                },
-            );
-            assert_eq!(3, model.weights.nnz());
-            assert_eq!(100, model.weights.indices()[0]);
-            assert_approx_eq!(0.20762629796386239, model.weights.data()[0]);
-            assert_eq!(200, model.weights.indices()[1]);
-            assert_approx_eq!(-1.4655500091007376, model.weights.data()[1]);
-            assert_eq!(201, model.weights.indices()[2]);
-            assert_approx_eq!(-1.1900622116954989, model.weights.data()[2]);
-            assert_approx_eq!(
-                0.232326,
-                model
-                    .predict_score(feature_matrix.outer_view(1).unwrap())
-                    .exp()
-            );
+        if gmax < eps {
+            break;
         }
 
-        // Log loss + weight threshold
-        {
-            let model = Model::train(
-                &feature_matrix.view(),
-                &labels,
-                &TrainHyperParam {
-                    loss_type: LossType::Log,
-                    eps: 0.01,
-                    C: 1.,
-                    weight_threshold: 0.25, // this filters out the first feature
-                },
-            );
-            assert_eq!(2, model.weights.nnz());
-            assert_eq!(200, model.weights.indices()[0]);
-            assert_approx_eq!(-1.4655500091007376, model.weights.data()[0]);
-            assert_eq!(201, model.weights.indices()[1]);
-            assert_approx_eq!(-1.1900622116954989, model.weights.data()[1]);
-        }
-
-        // Hinge loss
-        {
-            let model = Model::train(
-                &feature_matrix.view(),
-                &labels,
-                &TrainHyperParam {
-                    loss_type: LossType::Hinge,
-                    eps: 0.01,
-                    C: 1.,
-                    weight_threshold: 0.,
-                },
-            );
-            assert_eq!(3, model.weights.nnz());
-            assert_eq!(100, model.weights.indices()[0]);
-            assert_approx_eq!(0.06818952064451736, model.weights.data()[0]);
-            assert_eq!(200, model.weights.indices()[1]);
-            assert_approx_eq!(-1.1165663235675385, model.weights.data()[1]);
-            assert_eq!(201, model.weights.indices()[2]);
-            assert_approx_eq!(-0.7422697157666398, model.weights.data()[2]);
-            assert_approx_eq!(
-                -3.744966849165483,
-                model.predict_score(feature_matrix.outer_view(1).unwrap())
-            );
+        if newton_iter <= l / 10 {
+            innereps = innereps_min.max(0.1 * innereps);
         }
     }
-}
 
-mod ffi {
-    use super::*;
-
-    #[repr(C)]
-    #[allow(non_camel_case_types)]
-    #[derive(Copy, Clone, Debug)]
-    pub struct feature_node {
-        pub index: c_int,
-        pub value: c_double,
-    }
-
-    #[repr(C)]
-    #[allow(non_camel_case_types)]
-    #[derive(Debug)]
-    pub struct problem {
-        pub l: c_int,
-        pub n: c_int,
-        pub y: *const c_double,
-        pub x: *const *const feature_node,
-        pub bias: c_double,
-    }
-
-    pub static L2R_LR: c_int = 0;
-    pub static L2R_L2LOSS_SVC: c_int = 2;
-
-    #[repr(C)]
-    #[allow(non_camel_case_types)]
-    #[allow(non_snake_case)]
-    #[derive(Debug)]
-    pub struct parameter {
-        pub solver_type: c_int,
-        pub eps: c_double,
-        pub C: c_double,
-        pub nr_weight: c_int,
-        pub weight_label: *const c_int,
-        pub weight: *const c_double,
-        pub p: c_double,
-        pub init_sol: *const c_double,
-    }
-
-    #[repr(C)]
-    #[allow(non_camel_case_types)]
-    #[derive(Debug)]
-    pub struct model {
-        pub param: parameter,
-        pub nr_class: c_int,
-        pub nr_feature: c_int,
-        pub w: *const c_double,
-        pub label: *const c_int,
-        pub bias: c_double,
-    }
-
-    /// Used to suppress output from liblinear.
-    pub extern "C" fn print_null(_cstr: *const c_char) {}
-
-    extern "C" {
-        #[cfg(test)]
-        #[allow(non_upper_case_globals)]
-        static liblinear_version: i32;
-
-        pub fn train(prob: *const problem, param: *const parameter) -> *mut model;
-        pub fn check_parameter(prob: *const problem, param: *const parameter) -> *const c_char;
-        pub fn free_and_destroy_model(model_ptr_ptr: *mut *mut model);
-        pub fn set_print_string_function(print_func: extern "C" fn(*const c_char));
-    }
-
-    #[cfg(test)]
-    mod tests {
-        use super::*;
-
-        #[test]
-        fn test_version() {
-            unsafe {
-                assert_eq!(liblinear_version, 221);
-            }
-        }
-    }
+    w
 }

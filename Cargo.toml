@@ -22,6 +22,3 @@ bit-set = "0.5"
 sprs = { git = "https://github.com/tomtung/sprs.git", branch = "master" }
 # To stay consistent with sprs
 ndarray = "0.11.2"
-
-[build-dependencies]
-cc = "1.0"
