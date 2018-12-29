@@ -70,11 +70,11 @@ impl<'a> TreeTrainer<'a> {
         assert_eq!(dataset.feature_lists.len(), dataset.label_sets.len());
         let example_feature_matrix = dataset
             .feature_lists
-            .copy_to_csrmat(dataset.n_features, Some(1.));
+            .copy_normalized_with_bias_to_csrmat(dataset.n_features);
         let example_labels = dataset.label_sets.iter().collect_vec();
         let (all_labels, label_centroids) =
             compute_label_centroids(&dataset, hyper_param.centroid_threshold);
-        let label_centroid_matrix = label_centroids.copy_to_csrmat(dataset.n_features, None);
+        let label_centroid_matrix = label_centroids.copy_to_csrmat(dataset.n_features);
         let tree_height = compute_tree_height(all_labels.len(), hyper_param.max_leaf_size);
         Self {
             example_feature_matrix,

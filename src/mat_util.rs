@@ -2,6 +2,7 @@ use bit_set::BitSet;
 use ndarray::ArrayViewMut1;
 use num_traits::{Float, Num, Unsigned};
 use sprs::{CsMatBase, CsMatI, CsVecI, CsVecViewI, SpIndex, SparseMat};
+use std::iter::Sum;
 use std::ops::{AddAssign, Deref, DerefMut, DivAssign};
 
 pub trait IndexValuePairs<IndexT: SpIndex + Unsigned, ValueT: Copy>:
@@ -30,21 +31,19 @@ pub trait IndexValuePairs<IndexT: SpIndex + Unsigned, ValueT: Copy>:
         true
     }
 
-    /// Copy data to a new sprs sparse vector object.
+    /// Copy data to a new sprs sparse vector object with l2-normalization and appended bias.
     ///
-    /// This assumes that is_valid_sparse_vec would return true.
-    fn copy_to_csvec(
-        &self,
-        mut length: usize,
-        maybe_append_bias: Option<ValueT>,
-    ) -> CsVecI<ValueT, IndexT> {
-        let (mut indices, mut data): (Vec<IndexT>, Vec<ValueT>) = self.iter().cloned().unzip();
-        if let Some(bias) = maybe_append_bias {
-            indices.push(IndexT::from_usize(length));
-            data.push(bias);
-            length += 1;
-        }
-        CsVecI::new(length.index(), indices, data)
+    /// This assumes that is_valid_sparse_vec would return true. length here doesn't include bias.
+    fn copy_normalized_with_bias_to_csvec(&self, length: usize) -> CsVecI<ValueT, IndexT>
+    where
+        ValueT: Float + Sum,
+    {
+        let norm = self.iter().map(|(_, v)| v.powi(2)).sum::<ValueT>().sqrt();
+        let (mut indices, mut data): (Vec<IndexT>, Vec<ValueT>) =
+            self.iter().cloned().map(|(i, v)| (i, v / norm)).unzip();
+        indices.push(IndexT::from_usize(length));
+        data.push(ValueT::from(1.).unwrap());
+        CsVecI::new(length.index() + 1, indices, data)
     }
 }
 
@@ -109,11 +108,7 @@ where
     /// Copy data to a new sprs CSR matrix object.
     ///
     /// This assumes that is_valid_sparse_vec would return true for each row.
-    fn copy_to_csrmat(
-        &self,
-        mut n_col: usize,
-        maybe_append_bias: Option<ValueT>,
-    ) -> sprs::CsMatI<ValueT, IndexT>
+    fn copy_to_csrmat(&self, n_col: usize) -> sprs::CsMatI<ValueT, IndexT>
     where
         IndexT: SpIndex,
         ValueT: Copy,
@@ -129,17 +124,41 @@ where
                 indices.push(i);
                 data.push(v);
             }
-            if let Some(bias) = maybe_append_bias {
-                indices.push(IndexT::from_usize(n_col));
-                data.push(bias);
-            }
             indptr.push(IndexT::from_usize(indices.len()));
         }
 
-        if maybe_append_bias.is_some() {
-            n_col += 1;
-        }
         sprs::CsMatI::new((self.len(), n_col), indptr, indices, data)
+    }
+
+    /// Copy data to a new sprs CSR matrix object with each row l2-normalized and bias appended.
+    ///
+    /// This assumes that is_valid_sparse_vec would return true for each row. n_col here doesn't
+    /// include bias.
+    fn copy_normalized_with_bias_to_csrmat(&self, n_col: usize) -> sprs::CsMatI<ValueT, IndexT>
+    where
+        IndexT: SpIndex,
+        ValueT: Float + Sum,
+    {
+        let mut indptr: Vec<IndexT> = Vec::with_capacity(self.len() + 1);
+        let mut indices: Vec<IndexT> = Vec::new();
+        let mut data: Vec<ValueT> = Vec::new();
+
+        indptr.push(IndexT::zero());
+        let one = ValueT::from(1.).unwrap();
+        for row in self.iter() {
+            let norm = row.iter().map(|(_, v)| v.powi(2)).sum::<ValueT>().sqrt();
+            for &(i, v) in row.iter() {
+                assert!(i.index() < n_col);
+                indices.push(i);
+                data.push(v / norm);
+            }
+
+            indices.push(IndexT::from_usize(n_col));
+            data.push(one);
+            indptr.push(IndexT::from_usize(indices.len()));
+        }
+
+        sprs::CsMatI::new((self.len(), n_col + 1), indptr, indices, data)
     }
 }
 
@@ -332,15 +351,10 @@ mod tests {
     }
 
     #[test]
-    fn test_copy_to_csvec() {
+    fn test_copy_normalized_with_bias_to_csvec() {
         assert_eq!(
-            CsVecI::new(10, vec![1u32, 3, 5], vec![1., 2., 3.]),
-            vec![(1u32, 1.), (3, 2.), (5, 3.)].copy_to_csvec(10, None),
-        );
-
-        assert_eq!(
-            CsVecI::new(11, vec![1u32, 3, 5, 10], vec![1., 2., 3., 1.]),
-            vec![(1u32, 1.), (3, 2.), (5, 3.)].copy_to_csvec(10, Some(1.)),
+            CsVecI::new(11, vec![1usize, 3, 10], vec![3. / 5., 4. / 5., 1.]),
+            vec![(1usize, 3.), (3, 4.)].copy_normalized_with_bias_to_csvec(10),
         );
     }
 
@@ -395,17 +409,34 @@ mod tests {
                 vec![0, 1, 0, 2, 2],
                 vec![1, 2, 3, 4, 5],
             ),
-            mat.copy_to_csrmat(5, None)
+            mat.copy_to_csrmat(5)
         );
+    }
 
+    #[test]
+    fn test_copy_normalized_with_bias_to_csrmat() {
+        let mat = vec![
+            vec![(0usize, 1.), (1, 2.)],
+            vec![(0, 3.), (2, 4.)],
+            vec![(2, 5.)],
+        ];
         assert_eq!(
             sprs::CsMat::new(
                 (3, 6),
                 vec![0, 3, 6, 8],
                 vec![0, 1, 5, 0, 2, 5, 2, 5],
-                vec![1, 2, 1, 3, 4, 1, 5, 1],
+                vec![
+                    1. / (5.).sqrt(),
+                    2. / (5.).sqrt(),
+                    1.,
+                    3. / 5.,
+                    4. / 5.,
+                    1.,
+                    1.,
+                    1.,
+                ],
             ),
-            mat.copy_to_csrmat(5, Some(1))
+            mat.copy_normalized_with_bias_to_csrmat(5)
         );
     }
 
