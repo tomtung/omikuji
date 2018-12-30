@@ -2,10 +2,55 @@ mod cluster;
 mod liblinear;
 mod train;
 
-use crate::{Index, IndexValueVec, SparseVecView};
+use crate::{mat_util::*, Index, IndexValueVec, SparseVecView};
+use hashbrown::HashMap;
 use itertools::Itertools;
+use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::mem::swap;
+
+/// Model training hyper-parameters.
+pub type TrainHyperParam = train::HyperParam;
+
+/// A Parabel model, which contains a forest of trees.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Model {
+    trees: Vec<Tree>,
+    n_features: usize,
+}
+
+impl Model {
+    /// Returns a ranked list of predictions for the given input example.
+    ///
+    /// # Arguments
+    ///
+    /// * `feature_vec` - An input vector for prediction, assumed to be ordered by indices and have
+    /// no duplicate or out-of-range indices
+    /// * `beam_size` - Beam size for beam search.
+    pub fn predict(&self, feature_vec: &[(Index, f32)], beam_size: usize) -> IndexValueVec {
+        let feature_vec = feature_vec.copy_normalized_with_bias_to_csvec(self.n_features);
+        let mut label_to_total_score = HashMap::<Index, f32>::new();
+        let tree_predictions: Vec<_> = self
+            .trees
+            .par_iter()
+            .map(|tree| tree.predict(feature_vec.view(), beam_size))
+            .collect();
+        for label_score_pairs in tree_predictions {
+            for (label, score) in label_score_pairs {
+                let total_score = label_to_total_score.entry(label).or_insert(0.);
+                *total_score += score;
+            }
+        }
+
+        let mut label_score_pairs = label_to_total_score
+            .iter()
+            .map(|(&label, &total_score)| (label, total_score / self.trees.len() as f32))
+            .collect_vec();
+        label_score_pairs
+            .sort_unstable_by(|(_, score1), (_, score2)| score2.partial_cmp(score1).unwrap());
+        label_score_pairs
+    }
+}
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct Tree {
@@ -71,7 +116,7 @@ impl Tree {
             swap(&mut curr_level, &mut next_level);
         }
 
-        let mut label_score_pairs = curr_level
+        curr_level
             .iter()
             .flat_map(|&(leaf, score)| match leaf {
                 TreeNode::LeafNode {
@@ -85,9 +130,6 @@ impl Tree {
                     .collect_vec(),
                 _ => unreachable!("The tree is not a complete binary tree."),
             })
-            .collect_vec();
-        label_score_pairs
-            .sort_unstable_by(|(_, score1), (_, score2)| score2.partial_cmp(score1).unwrap());
-        label_score_pairs
+            .collect_vec()
     }
 }

@@ -1,4 +1,4 @@
-use super::{cluster, liblinear, Tree, TreeNode};
+use super::{cluster, liblinear, Model, Tree, TreeNode};
 use crate::data::DataSet;
 use crate::mat_util::*;
 use crate::{Index, IndexSet, IndexValueVec, SparseMat};
@@ -10,10 +10,26 @@ use std::iter::FromIterator;
 /// Model training hyper-parameters.
 #[derive(Copy, Clone, Debug)]
 pub struct HyperParam {
+    pub n_trees: usize,
     pub max_leaf_size: usize,
     pub cluster_eps: f32,
     pub centroid_threshold: f32,
     pub classifier: liblinear::HyperParam,
+}
+
+impl HyperParam {
+    /// Train a parabel model on the given dataset.
+    pub fn train(&self, dataset: &DataSet) -> Model {
+        let trainer = TreeTrainer::initialize(dataset, *self);
+        let trees: Vec<_> = (0..self.n_trees)
+            .into_par_iter()
+            .map(|_| trainer.train())
+            .collect();
+        Model {
+            trees,
+            n_features: dataset.n_features,
+        }
+    }
 }
 
 struct TreeTrainer<'a> {
