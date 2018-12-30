@@ -18,14 +18,14 @@ pub enum LossType {
 /// Hyper-parameter settings for training liblinear model.
 #[derive(Copy, Clone, Debug)]
 #[allow(non_snake_case)]
-pub struct TrainHyperParam {
+pub struct HyperParam {
     pub loss_type: LossType,
     pub eps: f32,
     pub C: f32,
     pub weight_threshold: f32,
 }
 
-impl TrainHyperParam {
+impl HyperParam {
     pub fn adapt_to_sample_size(&self, n_curr_examples: usize, n_total_examples: usize) -> Self {
         match self.loss_type {
             LossType::Hinge => *self,
@@ -59,7 +59,7 @@ impl Model {
         let p = self.weights.dot(feature_vec);
         match self.loss_type {
             LossType::Log => -(-p).exp().ln_1p(),
-            LossType::Hinge => -(1f32 - p).max(0.).powi(2),
+            LossType::Hinge => -(1. - p).max(0.).powi(2),
         }
     }
 
@@ -67,7 +67,7 @@ impl Model {
     pub fn train(
         feature_matrix: &SparseMatView,
         labels: &[bool],
-        hyper_param: &TrainHyperParam,
+        hyper_param: &HyperParam,
     ) -> Model {
         assert!(feature_matrix.is_csr());
         assert_eq!(feature_matrix.outer_dims(), labels.len());

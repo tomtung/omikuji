@@ -7,6 +7,7 @@ use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use std::mem::swap;
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
 struct Tree {
     root: TreeNode,
 }
@@ -22,7 +23,7 @@ enum TreeNode {
 }
 
 impl TreeNode {
-    pub fn is_leaf(&self) -> bool {
+    fn is_leaf(&self) -> bool {
         if let TreeNode::LeafNode { .. } = self {
             true
         } else {
@@ -32,7 +33,7 @@ impl TreeNode {
 }
 
 impl Tree {
-    pub fn predict(&self, feature_vec: SparseVecView, beam_size: usize) -> IndexValueVec {
+    fn predict(&self, feature_vec: SparseVecView, beam_size: usize) -> IndexValueVec {
         assert!(beam_size > 0);
 
         let mut curr_level = Vec::<(&TreeNode, f32)>::with_capacity(beam_size * 2);
@@ -55,15 +56,15 @@ impl Tree {
 
             next_level.clear();
             for &(node, score) in &curr_level {
-                if let TreeNode::BranchNode {
-                    child_classifier_pairs,
-                } = node
-                {
-                    for (child, classifier) in child_classifier_pairs {
-                        next_level.push((child, score + classifier.predict_score(feature_vec)));
+                match node {
+                    TreeNode::BranchNode {
+                        child_classifier_pairs,
+                    } => {
+                        for (child, classifier) in child_classifier_pairs {
+                            next_level.push((child, score + classifier.predict_score(feature_vec)));
+                        }
                     }
-                } else {
-                    unreachable!("The tree is not a complete binary tree.");
+                    _ => unreachable!("The tree is not a complete binary tree."),
                 }
             }
 
@@ -72,20 +73,17 @@ impl Tree {
 
         let mut label_score_pairs = curr_level
             .iter()
-            .flat_map(|&(leaf, score)| {
-                if let TreeNode::LeafNode {
+            .flat_map(|&(leaf, score)| match leaf {
+                TreeNode::LeafNode {
                     label_classifier_pairs,
-                } = leaf
-                {
-                    label_classifier_pairs
-                        .iter()
-                        .map(|(label, classifier)| {
-                            (*label, score + classifier.predict_score(feature_vec))
-                        })
-                        .collect_vec()
-                } else {
-                    unreachable!("The tree is not a complete binary tree.");
-                }
+                } => label_classifier_pairs
+                    .iter()
+                    .map(|(label, classifier)| {
+                        let label_score = (score + classifier.predict_score(feature_vec)).exp();
+                        (*label, label_score)
+                    })
+                    .collect_vec(),
+                _ => unreachable!("The tree is not a complete binary tree."),
             })
             .collect_vec();
         label_score_pairs

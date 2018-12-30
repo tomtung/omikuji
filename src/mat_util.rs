@@ -169,11 +169,11 @@ where
 {
 }
 
-pub trait SparseMatTools<DataT, IndexT: SpIndex>: SparseMat {
+pub trait CsMatBaseTools<DataT, IndexT: SpIndex>: SparseMat {
     fn copy_outer_dims(&self, indices: &[usize]) -> CsMatI<DataT, IndexT>;
 }
 
-impl<N, I, IptrStorage, IndStorage, DataStorage> SparseMatTools<N, I>
+impl<N, I, IptrStorage, IndStorage, DataStorage> CsMatBaseTools<N, I>
     for CsMatBase<N, I, IptrStorage, IndStorage, DataStorage>
 where
     I: SpIndex,
@@ -205,6 +205,62 @@ where
     }
 }
 
+pub trait CsMatITools<DataT: Copy, IndexT: SpIndex>: SparseMat + Sized {
+    fn shrink_column_indices(self) -> (Self, Vec<IndexT>);
+    fn remap_column_indices(self, old_index_to_new: &[IndexT], n_columns: usize) -> Self;
+}
+
+impl<N, I> CsMatITools<N, I> for CsMatI<N, I>
+where
+    I: SpIndex,
+    N: Copy,
+{
+    /// Shrinks column indices of a CSR matrix.
+    ///
+    /// The operation can be reversed by calling map_column_indices on the returned matrix and mapping.
+    fn shrink_column_indices(self) -> (Self, Vec<I>) {
+        assert!(self.is_csr());
+        let shape = self.shape();
+
+        let new_index_to_old = {
+            let mut old_indices = Vec::with_capacity(shape.1);
+            let mut index_set = BitSet::with_capacity(shape.1);
+            for &i in self.indices() {
+                if index_set.insert(i.index()) {
+                    old_indices.push(i);
+                }
+            }
+            old_indices.sort_unstable();
+            old_indices
+        };
+
+        let old_index_to_new = {
+            let mut lookup = vec![I::zero(); shape.1];
+            for (new_index, &old_index) in new_index_to_old.iter().enumerate() {
+                lookup[old_index.index()] = I::from_usize(new_index);
+            }
+            lookup
+        };
+
+        let mat = self.remap_column_indices(&old_index_to_new, new_index_to_old.len());
+        (mat, new_index_to_old)
+    }
+
+    /// Remap column indices according to the given mapping.
+    ///
+    /// The mapping is assumed to be well-formed, i.e. sorted, within range, and without duplicates.
+    fn remap_column_indices(self, old_index_to_new: &[I], n_columns: usize) -> Self {
+        assert!(self.is_csr());
+        let (n_rows, _) = self.shape();
+
+        let (indptr, mut indices, data) = self.into_raw_storage();
+        for index in &mut indices {
+            *index = old_index_to_new[index.index()];
+        }
+        CsMatI::new((n_rows, n_columns), indptr, indices, data)
+    }
+}
+
 pub fn csvec_dot_self<N, I>(vec: &CsVecViewI<N, I>) -> N
 where
     I: SpIndex,
@@ -215,28 +271,6 @@ where
         prod += val * val;
     }
     prod
-}
-
-/// Remap column indices according to the given mapping.
-///
-/// The mapping is assumed to be well-formed, i.e. sorted, within range, and without duplicates.
-pub fn remap_column_indices<N, I>(
-    csr_mat: CsMatI<N, I>,
-    old_index_to_new: &[I],
-    n_columns: usize,
-) -> CsMatI<N, I>
-where
-    I: SpIndex,
-    N: Copy,
-{
-    assert!(csr_mat.is_csr());
-    let (n_rows, _) = csr_mat.shape();
-
-    let (indptr, mut indices, data) = csr_mat.into_raw_storage();
-    for index in &mut indices {
-        *index = old_index_to_new[index.index()];
-    }
-    CsMatI::new((n_rows, n_columns), indptr, indices, data)
 }
 
 /// Remap indices according to the given mapping.
@@ -256,41 +290,6 @@ where
         *index = old_index_to_new[index.index()];
     }
     CsVecI::new(dim, indices, data)
-}
-
-/// Shrinks column indices of a CSR matrix.
-///
-/// The operation can be reversed by calling map_column_indices on the returned matrix and mapping.
-pub fn shrink_column_indices<N, I>(csr_mat: CsMatI<N, I>) -> (CsMatI<N, I>, Vec<I>)
-where
-    I: SpIndex,
-    N: Copy,
-{
-    assert!(csr_mat.is_csr());
-    let shape = csr_mat.shape();
-
-    let new_index_to_old = {
-        let mut old_indices = Vec::with_capacity(shape.1);
-        let mut index_set = BitSet::with_capacity(shape.1);
-        for &i in csr_mat.indices() {
-            if index_set.insert(i.index()) {
-                old_indices.push(i);
-            }
-        }
-        old_indices.sort_unstable();
-        old_indices
-    };
-
-    let old_index_to_new = {
-        let mut lookup = vec![I::zero(); shape.1];
-        for (new_index, &old_index) in new_index_to_old.iter().enumerate() {
-            lookup[old_index.index()] = I::from_usize(new_index);
-        }
-        lookup
-    };
-
-    let mat = remap_column_indices(csr_mat, &old_index_to_new, new_index_to_old.len());
-    (mat, new_index_to_old)
 }
 
 pub fn dense_add_assign_csvec<N, I>(mut dense_vec: ArrayViewMut1<N>, csvec: CsVecViewI<N, I>)
@@ -475,7 +474,7 @@ mod tests {
                 vec![10, 100, 10, 1000, 1000],
                 vec![1, 2, 3, 4, 5],
             ),
-            remap_column_indices(mat, &vec![10, 100, 1000], 2000,)
+            mat.remap_column_indices(&vec![10, 100, 1000], 2000)
         );
     }
 
@@ -506,7 +505,7 @@ mod tests {
                 ),
                 vec![10, 100, 1000]
             ),
-            shrink_column_indices(mat)
+            mat.shrink_column_indices()
         )
     }
 
