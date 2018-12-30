@@ -2,22 +2,37 @@ use super::{cluster, liblinear, Model, Tree, TreeNode};
 use crate::data::DataSet;
 use crate::mat_util::*;
 use crate::{Index, IndexSet, IndexValueVec, SparseMat};
+use derive_builder::Builder;
 use hashbrown::HashMap;
 use itertools::{izip, Itertools};
 use rayon::prelude::*;
 use std::iter::FromIterator;
 
 /// Model training hyper-parameters.
-#[derive(Copy, Clone, Debug)]
+#[derive(Builder, Copy, Clone, Debug)]
 pub struct HyperParam {
+    #[builder(default = "3")]
     pub n_trees: usize,
+
+    #[builder(default = "100")]
     pub max_leaf_size: usize,
+
+    #[builder(default = "0.0001")]
     pub cluster_eps: f32,
+
+    #[builder(default = "0.")]
     pub centroid_threshold: f32,
-    pub classifier: liblinear::HyperParam,
+
+    #[builder(default)]
+    pub linear: liblinear::HyperParam,
 }
 
 impl HyperParam {
+    /// Create a builder object.
+    pub fn builder() -> HyperParamBuilder {
+        HyperParamBuilder::default()
+    }
+
     /// Train a parabel model on the given dataset.
     pub fn train(&self, dataset: &DataSet) -> Model {
         let trainer = TreeTrainer::initialize(dataset, *self);
@@ -73,7 +88,7 @@ impl<'a> TreeTrainer<'a> {
     #[inline]
     fn classifier_hyper_param(&self, n_examples: usize) -> liblinear::HyperParam {
         self.hyper_param
-            .classifier
+            .linear
             .adapt_to_sample_size(n_examples, self.all_examples.len())
     }
 

@@ -12,6 +12,9 @@ use std::mem::swap;
 /// Model training hyper-parameters.
 pub type TrainHyperParam = train::HyperParam;
 
+/// Hyper-parameters for training linear classifiers.
+pub type LinearHyperParam = liblinear::HyperParam;
+
 /// A Parabel model, which contains a forest of trees.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Model {

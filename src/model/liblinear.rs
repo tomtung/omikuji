@@ -1,5 +1,6 @@
 use crate::mat_util::*;
 use crate::{Index, SparseMatView, SparseVec, SparseVecView};
+use derive_builder::Builder;
 use itertools::Itertools;
 use ndarray::Array1;
 use rand::prelude::*;
@@ -16,17 +17,39 @@ pub enum LossType {
 }
 
 /// Hyper-parameter settings for training liblinear model.
-#[derive(Copy, Clone, Debug)]
+#[derive(Builder, Copy, Clone, Debug)]
 #[allow(non_snake_case)]
 pub struct HyperParam {
+    #[builder(default = "LossType::Hinge")]
     pub loss_type: LossType,
+
+    #[builder(default = "0.1")]
     pub eps: f32,
+
+    #[builder(default = "1.")]
     pub C: f32,
+
+    #[builder(default = "0.1")]
     pub weight_threshold: f32,
 }
 
+impl Default for HyperParam {
+    fn default() -> Self {
+        HyperParamBuilder::default().build().unwrap()
+    }
+}
+
 impl HyperParam {
-    pub fn adapt_to_sample_size(&self, n_curr_examples: usize, n_total_examples: usize) -> Self {
+    /// Create a builder object.
+    pub fn builder() -> HyperParamBuilder {
+        HyperParamBuilder::default()
+    }
+
+    pub(crate) fn adapt_to_sample_size(
+        &self,
+        n_curr_examples: usize,
+        n_total_examples: usize,
+    ) -> Self {
         match self.loss_type {
             LossType::Hinge => *self,
             LossType::Log => Self {
