@@ -4,6 +4,7 @@ use crate::mat_util::*;
 use crate::{Index, IndexSet, IndexValueVec, SparseMat, SparseMatView};
 use hashbrown::HashMap;
 use itertools::{izip, Itertools};
+use rayon::prelude::*;
 use std::cmp::{max, min};
 use std::iter::FromIterator;
 
@@ -68,13 +69,25 @@ impl<'a> TreeTrainer<'a> {
     /// Dataset is assumed to be well-formed.
     pub(self) fn initialize(dataset: &'a DataSet, hyper_param: HyperParam) -> Self {
         assert_eq!(dataset.feature_lists.len(), dataset.label_sets.len());
-        let example_feature_matrix = dataset
-            .feature_lists
-            .copy_normalized_with_bias_to_csrmat(dataset.n_features);
-        let example_labels = dataset.label_sets.iter().collect_vec();
-        let (all_labels, label_centroids) =
-            compute_label_centroids(&dataset, hyper_param.centroid_threshold);
-        let label_centroid_matrix = label_centroids.copy_to_csrmat(dataset.n_features);
+        let ((example_feature_matrix, example_labels), (all_labels, label_centroid_matrix)) =
+            rayon::join(
+                || {
+                    (
+                        dataset
+                            .feature_lists
+                            .copy_normalized_with_bias_to_csrmat(dataset.n_features),
+                        dataset.label_sets.iter().collect_vec(),
+                    )
+                },
+                || {
+                    let (all_labels, label_centroids) =
+                        compute_label_centroids(&dataset, hyper_param.centroid_threshold);
+                    (
+                        all_labels,
+                        label_centroids.copy_to_csrmat(dataset.n_features),
+                    )
+                },
+            );
         let tree_height = compute_tree_height(all_labels.len(), hyper_param.max_leaf_size);
         Self {
             example_feature_matrix,
@@ -115,7 +128,7 @@ impl<'a> TreeTrainer<'a> {
         assert!(n_examples > 0);
         TreeNode::LeafNode {
             label_classifier_pairs: leaf_labels
-                .iter()
+                .par_iter()
                 .map(|&leaf_label| {
                     let labels = example_labels
                         .iter()
@@ -161,7 +174,7 @@ impl<'a> TreeTrainer<'a> {
                 <= 1
         );
         [true_indices, false_indices]
-            .iter()
+            .par_iter()
             .map(|indices| {
                 let split_labels = indices.iter().map(|&i| labels[i]).collect_vec();
                 let (split_centroid_matrix, _) =
@@ -178,7 +191,7 @@ impl<'a> TreeTrainer<'a> {
         // An example belongs to the current split if it has any of the split labels
         let split_label_set = IndexSet::from_iter(split_labels.iter().cloned());
         example_labels
-            .iter()
+            .par_iter()
             .enumerate()
             .filter_map(|(i, labels)| {
                 if labels.is_disjoint(&split_label_set) {
@@ -187,7 +200,7 @@ impl<'a> TreeTrainer<'a> {
                     Some(i)
                 }
             })
-            .collect_vec()
+            .collect()
     }
 
     fn train_branch_split_classifier(
@@ -235,47 +248,51 @@ impl<'a> TreeTrainer<'a> {
 
         let mut child_classifier_pairs = self
             .split_branch(subtree_labels, &subtree_label_centroid_matrix)
-            .into_iter()
+            .into_par_iter()
             .map(|(split_labels, split_label_centroid_matrix)| {
                 let split_example_indices =
                     Self::find_examples_with_labels(example_labels, &split_labels);
 
-                let classifier = self
-                    .train_branch_split_classifier(&example_feature_matrix, &split_example_indices)
-                    .remap_features_indices(
-                        col_index_to_feature,
-                        self.example_feature_matrix.cols(),
-                    );
+                let (classifier, subtree) = rayon::join(
+                    || {
+                        self.train_branch_split_classifier(
+                            &example_feature_matrix,
+                            &split_example_indices,
+                        )
+                        .remap_features_indices(
+                            col_index_to_feature,
+                            self.example_feature_matrix.cols(),
+                        )
+                    },
+                    || {
+                        let (split_example_feature_matrix, mut new_index_to_old) =
+                            shrink_column_indices(
+                                example_feature_matrix.copy_outer_dims(&split_example_indices),
+                            );
+                        for index in &mut new_index_to_old {
+                            *index = col_index_to_feature[*index as usize];
+                        }
 
-                // Train a subtree for the current split
-                let subtree = {
-                    let (split_example_feature_matrix, mut new_index_to_old) =
-                        shrink_column_indices(
-                            example_feature_matrix.copy_outer_dims(&split_example_indices),
-                        );
-                    for index in &mut new_index_to_old {
-                        *index = col_index_to_feature[*index as usize];
-                    }
+                        let split_examples_labels = split_example_indices
+                            .iter()
+                            .map(|&i| example_labels[i])
+                            .collect_vec();
 
-                    let split_examples_labels = split_example_indices
-                        .iter()
-                        .map(|&i| example_labels[i])
-                        .collect_vec();
-
-                    self.train_subtree(
-                        height - 1,
-                        (
-                            split_example_feature_matrix.view(),
-                            &split_examples_labels,
-                            &new_index_to_old,
-                        ),
-                        (&split_labels, split_label_centroid_matrix.view()),
-                    )
-                };
+                        self.train_subtree(
+                            height - 1,
+                            (
+                                split_example_feature_matrix.view(),
+                                &split_examples_labels,
+                                &new_index_to_old,
+                            ),
+                            (&split_labels, split_label_centroid_matrix.view()),
+                        )
+                    },
+                );
 
                 (Box::new(subtree), classifier)
             })
-            .collect_vec();
+            .collect::<Vec<_>>();
 
         assert_eq!(2, child_classifier_pairs.len());
         TreeNode::BranchNode {
