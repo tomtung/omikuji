@@ -111,7 +111,6 @@ impl Model {
             )
             .indexed_iter()
             .filter_map(|(index, &value)| {
-                // TODO I think there's a function for doing this?
                 if value.abs() <= hyper_param.weight_threshold {
                     None
                 } else {
