@@ -5,8 +5,11 @@ use crate::{Index, IndexSet, IndexValueVec, SparseMat};
 use derive_builder::Builder;
 use hashbrown::HashMap;
 use itertools::{izip, Itertools};
+use pbr::ProgressBar;
 use rayon::prelude::*;
+use std::io::{stderr, Stderr};
 use std::iter::FromIterator;
+use std::sync::Mutex;
 
 /// Model training hyper-parameters.
 #[derive(Builder, Copy, Clone, Debug)]
@@ -52,6 +55,7 @@ struct TreeTrainer<'a> {
     all_labels: LabelCluster,
     tree_height: usize,
     hyper_param: HyperParam,
+    progress_bar: Mutex<ProgressBar<Stderr>>,
 }
 
 impl<'a> TreeTrainer<'a> {
@@ -66,12 +70,27 @@ impl<'a> TreeTrainer<'a> {
         );
 
         let tree_height = Self::compute_tree_height(all_labels.len(), hyper_param.max_leaf_size);
+        let progress_bar =
+            Self::create_progress_bar(all_labels.len(), tree_height, hyper_param.n_trees);
         Self {
             all_examples,
             all_labels,
             tree_height,
             hyper_param,
+            progress_bar,
         }
+    }
+
+    fn create_progress_bar(
+        n_labels: usize,
+        tree_height: usize,
+        n_trees: usize,
+    ) -> Mutex<ProgressBar<Stderr>> {
+        let n_classifiers_per_tree = 2usize.pow(tree_height as u32 + 1) - 2 + n_labels;
+        Mutex::new(ProgressBar::on(
+            stderr(),
+            (n_trees * n_classifiers_per_tree) as u64,
+        ))
     }
 
     /// Determines the height of the tree.
@@ -122,11 +141,18 @@ impl<'a> TreeTrainer<'a> {
     }
 
     fn train_leaf_node(&self, examples: &TrainingExamples, leaf_labels: &[Index]) -> TreeNode {
+        let label_classifier_pairs = leaf_labels
+            .par_iter()
+            .map(|&leaf_label| (leaf_label, self.train_leaf_classifier(examples, leaf_label)))
+            .collect();
+
+        self.progress_bar
+            .lock()
+            .unwrap()
+            .add(leaf_labels.len() as u64);
+
         TreeNode::LeafNode {
-            label_classifier_pairs: leaf_labels
-                .par_iter()
-                .map(|&leaf_label| (leaf_label, self.train_leaf_classifier(examples, leaf_label)))
-                .collect(),
+            label_classifier_pairs,
         }
     }
 
@@ -174,10 +200,13 @@ impl<'a> TreeTrainer<'a> {
             classifier_labels[i] = true;
         }
 
-        self.train_classifier(examples, &classifier_labels)
+        let model = self.train_classifier(examples, &classifier_labels);
+
+        self.progress_bar.lock().unwrap().add(1);
+
+        model
     }
 
-    #[inline]
     fn train_classifier(
         &self,
         examples: &TrainingExamples,
