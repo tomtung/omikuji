@@ -111,11 +111,12 @@ impl<'a> TreeTrainer<'a> {
         } else {
             // Otherwise, branch and train subtrees recursively
             let [left_cluster, right_cluster] = label_cluster.split(self.hyper_param.cluster_eps);
+            let (left_pair, right_pair) = rayon::join(
+                || self.train_branch_split(height, examples, &left_cluster),
+                || self.train_branch_split(height, examples, &right_cluster),
+            );
             TreeNode::BranchNode {
-                child_classifier_pairs: [
-                    self.train_branch_split(height, examples, &left_cluster),
-                    self.train_branch_split(height, examples, &right_cluster),
-                ],
+                child_classifier_pairs: [left_pair, right_pair],
             }
         }
     }
