@@ -1,4 +1,5 @@
 mod cluster;
+mod eval;
 mod liblinear;
 mod train;
 

@@ -7,6 +7,8 @@ pub type SparseVec = sprs::CsVecI<f32, Index>;
 pub type SparseVecView<'a> = sprs::CsVecViewI<'a, f32, Index>;
 pub type SparseMat = sprs::CsMatI<f32, Index>;
 pub type SparseMatView<'a> = sprs::CsMatViewI<'a, f32, Index>;
+pub type DataSet = data::DataSet;
+pub type Model = model::Model;
 
 pub mod data;
 mod mat_util;
