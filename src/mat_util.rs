@@ -129,37 +129,6 @@ where
 
         sprs::CsMatI::new((self.len(), n_col), indptr, indices, data)
     }
-
-    /// Copy data to a new sprs CSR matrix object with each row l2-normalized and bias appended.
-    ///
-    /// This assumes that is_valid_sparse_vec would return true for each row. n_col here doesn't
-    /// include bias.
-    fn copy_normalized_with_bias_to_csrmat(&self, n_col: usize) -> sprs::CsMatI<ValueT, IndexT>
-    where
-        IndexT: SpIndex,
-        ValueT: Float + Sum,
-    {
-        let mut indptr: Vec<IndexT> = Vec::with_capacity(self.len() + 1);
-        let mut indices: Vec<IndexT> = Vec::new();
-        let mut data: Vec<ValueT> = Vec::new();
-
-        indptr.push(IndexT::zero());
-        let one = ValueT::from(1.).unwrap();
-        for row in self.iter() {
-            let norm = row.iter().map(|(_, v)| v.powi(2)).sum::<ValueT>().sqrt();
-            for &(i, v) in row.iter() {
-                assert!(i.index() < n_col);
-                indices.push(i);
-                data.push(v / norm);
-            }
-
-            indices.push(IndexT::from_usize(n_col));
-            data.push(one);
-            indptr.push(IndexT::from_usize(indices.len()));
-        }
-
-        sprs::CsMatI::new((self.len(), n_col + 1), indptr, indices, data)
-    }
 }
 
 impl<IndexT, ValueT, RowT, T> IndexValuePairLists<IndexT, ValueT, RowT> for T
@@ -409,33 +378,6 @@ mod tests {
                 vec![1, 2, 3, 4, 5],
             ),
             mat.copy_to_csrmat(5)
-        );
-    }
-
-    #[test]
-    fn test_copy_normalized_with_bias_to_csrmat() {
-        let mat = vec![
-            vec![(0usize, 1.), (1, 2.)],
-            vec![(0, 3.), (2, 4.)],
-            vec![(2, 5.)],
-        ];
-        assert_eq!(
-            sprs::CsMat::new(
-                (3, 6),
-                vec![0, 3, 6, 8],
-                vec![0, 1, 5, 0, 2, 5, 2, 5],
-                vec![
-                    1. / (5.).sqrt(),
-                    2. / (5.).sqrt(),
-                    1.,
-                    3. / 5.,
-                    4. / 5.,
-                    1.,
-                    1.,
-                    1.,
-                ],
-            ),
-            mat.copy_normalized_with_bias_to_csrmat(5)
         );
     }
 

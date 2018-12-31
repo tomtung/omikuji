@@ -48,7 +48,7 @@ fn train(matches: &clap::ArgMatches) {
         parabel::DataSet::load_xc_repo_data_file(path).expect("Failed to load training data")
     };
 
-    let model = train_hyperparam.train(&training_dataset);
+    let model = train_hyperparam.train(training_dataset);
     if let Some(model_path) = matches.value_of("model_path") {
         let model_file = File::create(model_path).expect("Failed to create model file");
         model

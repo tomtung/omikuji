@@ -59,7 +59,6 @@ impl DataSet {
             if !features.is_valid_sparse_vec(n_features) {
                 Err(ErrorKind::InvalidData)?;
             }
-            features.shrink_to_fit();
         }
 
         Ok((features, labels))

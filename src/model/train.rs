@@ -37,12 +37,15 @@ impl HyperParam {
     }
 
     /// Train a parabel model on the given dataset.
-    pub fn train(&self, dataset: &DataSet) -> Model {
+    ///
+    /// Here we take ownership of the dataset object to perform necessary prepossessing. One can
+    /// choose to clone a dataset before passing it in to avoid losing the original data.
+    pub fn train(&self, mut dataset: DataSet) -> Model {
         info!("Training Parabel model with hyper-parameters {:?}", self);
         let start_t = time::precise_time_s();
 
         info!("Initializing tree trainer");
-        let trainer = TreeTrainer::initialize(dataset, *self);
+        let trainer = TreeTrainer::initialize(&mut dataset, *self);
 
         info!("Start training forest");
         let trees: Vec<_> = (0..self.n_trees)
@@ -73,16 +76,30 @@ impl<'a> TreeTrainer<'a> {
     /// Initialize a reusable tree trainer with the dataset and hyper-parameters.
     ///
     /// Dataset is assumed to be well-formed.
-    fn initialize(dataset: &'a DataSet, hyper_param: HyperParam) -> Self {
+    fn initialize(dataset: &'a mut DataSet, hyper_param: HyperParam) -> Self {
         assert_eq!(dataset.feature_lists.len(), dataset.label_sets.len());
-        let (all_examples, all_labels) = rayon::join(
-            || TrainingExamples::new_from_dataset(dataset),
-            || LabelCluster::new_from_dataset(dataset, hyper_param.centroid_threshold),
-        );
+        // l2-normalize all examples in the dataset
+        dataset
+            .feature_lists
+            .par_iter_mut()
+            .for_each(|v| v.l2_normalize());
+        // Initialize label clusters
+        let all_labels = LabelCluster::new_from_dataset(dataset, hyper_param.centroid_threshold);
+
+        // Append bias term to each vector to make training linear classifiers easier
+        let bias_index = dataset.n_features as Index;
+        dataset
+            .feature_lists
+            .iter_mut()
+            .for_each(|v| v.push((bias_index, 1.)));
+        // Initialize examples set
+        let all_examples = TrainingExamples::new_from_dataset(dataset);
 
         let tree_height = Self::compute_tree_height(all_labels.len(), hyper_param.max_leaf_size);
+
         let progress_bar =
             Self::create_progress_bar(all_labels.len(), tree_height, hyper_param.n_trees);
+
         Self {
             all_examples,
             all_labels,
@@ -256,9 +273,7 @@ impl<'a> TrainingExamples<'a> {
     }
 
     fn new_from_dataset(dataset: &'a DataSet) -> Self {
-        let feature_matrix = dataset
-            .feature_lists
-            .copy_normalized_with_bias_to_csrmat(dataset.n_features);
+        let feature_matrix = dataset.feature_lists.copy_to_csrmat(dataset.n_features + 1); // + 1 because we added bias term
         let index_to_feature = (0..feature_matrix.cols() as Index).collect_vec();
         let label_sets = dataset.label_sets.iter().collect_vec();
 
