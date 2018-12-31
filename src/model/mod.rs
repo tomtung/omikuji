@@ -6,8 +6,10 @@ mod train;
 use crate::{mat_util::*, Index, IndexValueVec, SparseVecView};
 use hashbrown::HashMap;
 use itertools::Itertools;
+use log::info;
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
+use std::io;
 use std::mem::swap;
 
 /// Model training hyper-parameters.
@@ -53,6 +55,35 @@ impl Model {
         label_score_pairs
             .sort_unstable_by(|(_, score1), (_, score2)| score2.partial_cmp(score1).unwrap());
         label_score_pairs
+    }
+
+    /// Serialize model.
+    pub fn save<W: io::Write>(&self, writer: W) -> io::Result<()> {
+        info!("Saving model...");
+        let start_t = time::precise_time_s();
+
+        bincode::serialize_into(writer, self)
+            .or_else(|e| Err(io::Error::new(io::ErrorKind::Other, e)))?;
+
+        info!(
+            "Model saved; it took {:.2}s",
+            time::precise_time_s() - start_t
+        );
+        Ok(())
+    }
+
+    /// Deserialize model.
+    pub fn load<R: io::Read>(reader: R) -> io::Result<Self> {
+        info!("Loading model...");
+        let start_t = time::precise_time_s();
+
+        let model: Self = bincode::deserialize_from(reader)
+            .or_else(|e| Err(io::Error::new(io::ErrorKind::Other, e)))?;
+        info!(
+            "Model loaded; it took {:.2}s",
+            time::precise_time_s() - start_t
+        );
+        Ok(model)
     }
 }
 
