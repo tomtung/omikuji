@@ -31,6 +31,9 @@ pub struct HyperParam {
 
     #[builder(default = "0.1")]
     pub weight_threshold: f32,
+
+    #[builder(default = "20")]
+    pub max_iter: u32,
 }
 
 impl Default for HyperParam {
@@ -107,7 +110,7 @@ impl Model {
                 hyper_param.eps,
                 hyper_param.C,
                 hyper_param.C,
-                20,
+                hyper_param.max_iter,
             )
             .indexed_iter()
             .filter_map(|(index, &value)| {
