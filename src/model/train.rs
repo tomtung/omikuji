@@ -1,13 +1,12 @@
 use super::{cluster, liblinear, Model, Tree, TreeNode};
 use crate::data::DataSet;
 use crate::mat_util::*;
+use crate::util::{create_progress_bar, ProgressBar};
 use crate::{Index, IndexSet, IndexValueVec, SparseMat};
 use derive_builder::Builder;
 use hashbrown::HashMap;
 use itertools::{izip, Itertools};
-use pbr::ProgressBar;
 use rayon::prelude::*;
-use std::io::{stderr, Stderr};
 use std::iter::FromIterator;
 use std::sync::Mutex;
 
@@ -55,7 +54,7 @@ struct TreeTrainer<'a> {
     all_labels: LabelCluster,
     tree_height: usize,
     hyper_param: HyperParam,
-    progress_bar: Mutex<ProgressBar<Stderr>>,
+    progress_bar: Mutex<ProgressBar>,
 }
 
 impl<'a> TreeTrainer<'a> {
@@ -85,10 +84,9 @@ impl<'a> TreeTrainer<'a> {
         n_labels: usize,
         tree_height: usize,
         n_trees: usize,
-    ) -> Mutex<ProgressBar<Stderr>> {
+    ) -> Mutex<ProgressBar> {
         let n_classifiers_per_tree = 2usize.pow(tree_height as u32 + 1) - 2 + n_labels;
-        Mutex::new(ProgressBar::on(
-            stderr(),
+        Mutex::new(create_progress_bar(
             (n_trees * n_classifiers_per_tree) as u64,
         ))
     }

@@ -11,3 +11,4 @@ pub type SparseMatView<'a> = sprs::CsMatViewI<'a, f32, Index>;
 pub mod data;
 mod mat_util;
 pub mod model;
+mod util;

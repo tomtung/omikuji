@@ -1,7 +1,7 @@
 use crate::mat_util::*;
+use crate::util::create_progress_bar;
 use crate::{Index, IndexSet, IndexValueVec};
 use log::info;
-use pbr::ProgressBar;
 use std::fs::File;
 use std::io::prelude::*;
 use std::io::{BufReader, Error, ErrorKind, Result};
@@ -94,7 +94,7 @@ impl DataSet {
             (n_examples, n_features, n_labels)
         };
 
-        let mut pb = ProgressBar::on(::std::io::stderr(), n_examples as u64);
+        let mut pb = create_progress_bar(n_examples as u64);
         let mut feature_lists = Vec::with_capacity(n_examples);
         let mut label_sets = Vec::with_capacity(n_examples);
         for line in lines {
