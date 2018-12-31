@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 pub type Index = u32;
 pub type IndexValueVec = Vec<(Index, f32)>;
 pub type IndexSet = hashbrown::HashSet<Index>;
