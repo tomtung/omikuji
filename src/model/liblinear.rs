@@ -65,7 +65,7 @@ impl HyperParam {
 
 /// A binary classifier trained with liblinear.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct Model {
+pub(crate) struct Model {
     weights: SparseVec,
     loss_type: LossType,
 }
@@ -74,14 +74,14 @@ impl Model {
     /// Remap indices of weight vector.
     ///
     /// The mapping is assumed to be well-formed, i.e. sorted, within range, and without duplicates.
-    pub fn remap_features_indices(self, index_to_feature: &[Index], n_cols: usize) -> Self {
+    pub(crate) fn remap_features_indices(self, index_to_feature: &[Index], n_cols: usize) -> Self {
         let Self { weights, loss_type } = self;
         let weights = remap_csvec_indices(weights, index_to_feature, n_cols);
         Self { weights, loss_type }
     }
 
     /// Compute score for a given example.
-    pub fn predict_score(&self, feature_vec: SparseVecView) -> f32 {
+    pub(crate) fn predict_score(&self, feature_vec: SparseVecView) -> f32 {
         let p = self.weights.dot(feature_vec);
         match self.loss_type {
             LossType::Log => -(-p).exp().ln_1p(),
@@ -90,7 +90,7 @@ impl Model {
     }
 
     /// Train a binary classifier with liblinear.
-    pub fn train(
+    pub(crate) fn train(
         feature_matrix: &SparseMatView,
         labels: &[bool],
         hyper_param: &HyperParam,

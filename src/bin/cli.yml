@@ -1,0 +1,101 @@
+name: parabel
+about: "Parabel: Partitioned Label Trees for Extreme Classification"
+
+subcommands:
+  - train:
+      about: Train a new Parabel model
+      args:
+        - training_data:
+            help: Path to training dataset file (in the format of the Extreme Classification Repository)
+            index: 1
+            required: true
+        - model_path:
+            help: Path to which the trained model will be saved if provided
+            long: model_path
+            takes_value: true
+            value_name: PATH
+        - n_threads:
+            help: Number of worker threads. If 0, the number is selected automatically
+            long: n_threads
+            takes_value: true
+            default_value: "0"
+        - n_trees:
+            help: Number of trees (hyper-parameter)
+            long: n_trees
+            takes_value: true
+            default_value: "3"
+        - max_leaf_size:
+            help: Max number of labels in a leaf node (hyper-parameter)
+            long: max_leaf_size
+            takes_value: true
+            default_value: "100"
+        - cluster_eps:
+            help: Epsilon value for determining clustering convergence (hyper-parameter)
+            long: cluster_eps
+            takes_value: true
+            default_value: "0.0001"
+        - centroid_threshold:
+            help: Threshold for pruning label centroid vectors (hyper-parameter)
+            long: centroid_threshold
+            takes_value: true
+            default_value: "0.0"
+        - linear.loss:
+            help: Loss function used by linear classifiers (hyper-parameter)
+            long: linear.loss
+            takes_value: true
+            default_value: "hinge"
+            possible_values:
+              - hinge
+              - log
+        - linear.eps:
+            help: Epsilon value for determining linear classifier convergence (hyper-parameter)
+            long: linear.eps
+            takes_value: true
+            default_value: "0.1"
+        - linear.c:
+            help: Cost co-efficient for regularizing linear classifiers (hyper-parameter)
+            long: linear.c
+            takes_value: true
+            default_value: "1.0"
+        - linear.weight_threshold:
+            help: Threshold for pruning weight vectors of linear classifiers (hyper-parameter)
+            long: linear.weight_threshold
+            takes_value: true
+            default_value: "0.1"
+        - linear.max_iter:
+            help: Max number of iterations for training each linear classifier (hyper-parameter)
+            long: linear.max_iter
+            takes_value: true
+            default_value: "20"
+  - test:
+      about: Test an existing Parabel model
+      args:
+        - model_path:
+            help: Path to the trained model
+            index: 1
+            required: true
+        - test_data:
+            help: Path to test dataset file (in the format of the Extreme Classification Repository)
+            index: 2
+            required: true
+        - n_threads:
+            help: Number of worker threads. If 0, the number is selected automatically
+            long: n_threads
+            takes_value: true
+            default_value: "0"
+        - beam_size:
+            help: Beam size for beam search
+            long: beam_size
+            takes_value: true
+            default_value: "10"
+        - out_path:
+            help: Path to the which predictions will be written, if provided
+            long: out_path
+            takes_value: true
+            value_name: PATH
+        - k_top:
+            help: Number of top predictions to write out for each test example
+            requires: out_path
+            long: k_top
+            takes_value: true
+            default_value: "5"

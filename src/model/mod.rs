@@ -1,7 +1,7 @@
 mod cluster;
 pub mod eval;
-mod liblinear;
-mod train;
+pub mod liblinear;
+pub mod train;
 
 use crate::{mat_util::*, Index, IndexValueVec, SparseVecView};
 use hashbrown::HashMap;
@@ -14,9 +14,6 @@ use std::mem::swap;
 
 /// Model training hyper-parameters.
 pub type TrainHyperParam = train::HyperParam;
-
-/// Hyper-parameters for training linear classifiers.
-pub type LinearHyperParam = liblinear::HyperParam;
 
 /// A Parabel model, which contains a forest of trees.
 #[derive(Clone, Debug, Serialize, Deserialize)]
