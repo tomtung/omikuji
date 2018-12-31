@@ -6,6 +6,7 @@ use crate::{Index, IndexSet, IndexValueVec, SparseMat};
 use derive_builder::Builder;
 use hashbrown::HashMap;
 use itertools::{izip, Itertools};
+use log::info;
 use rayon::prelude::*;
 use std::iter::FromIterator;
 use std::sync::Mutex;
@@ -37,11 +38,22 @@ impl HyperParam {
 
     /// Train a parabel model on the given dataset.
     pub fn train(&self, dataset: &DataSet) -> Model {
+        info!("Training Parabel model with hyper-parameters {:?}", self);
+        let start_t = time::precise_time_s();
+
+        info!("Initializing tree trainer");
         let trainer = TreeTrainer::initialize(dataset, *self);
+
+        info!("Start training forest");
         let trees: Vec<_> = (0..self.n_trees)
             .into_par_iter()
             .map(|_| trainer.train())
             .collect();
+
+        info!(
+            "Parabel model training complete; it took {:.2}s",
+            time::precise_time_s() - start_t
+        );
         Model {
             trees,
             n_features: dataset.n_features,
