@@ -1,11 +1,14 @@
 use crate::mat_util::*;
-use crate::{Index, SparseMatView, SparseVec, SparseVecView};
+use crate::{Index, SparseMat, SparseMatView, SparseVecView};
 use derive_builder::Builder;
 use itertools::Itertools;
 use ndarray::Array1;
 use rand::prelude::*;
+use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
+use sprs::prod::csr_mul_csvec;
 use std::f32::{INFINITY, NEG_INFINITY};
+use std::ops::Deref;
 
 /// The loss function used by liblinear model.
 #[derive(Eq, PartialEq, Copy, Clone, Debug, Serialize, Deserialize)]
@@ -63,50 +66,30 @@ impl HyperParam {
     }
 }
 
-/// A binary classifier trained with liblinear.
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub(crate) struct Model {
-    weights: SparseVec,
-    loss_type: LossType,
-}
+/// Train a group of linear classifiers, and return their weights in a single matrix.
+pub(crate) fn train_classifier_group<Indices: Deref<Target = [usize]> + Sync>(
+    feature_matrix: &SparseMatView,
+    index_lists: &[Indices],
+    hyper_param: &HyperParam,
+) -> SparseMat {
+    assert!(feature_matrix.is_csr());
+    let solver = match hyper_param.loss_type {
+        LossType::Hinge => solve_l2r_l2_svc,
+        LossType::Log => solve_l2r_lr_dual,
+    };
+    let weight_vecs = index_lists
+        .par_iter()
+        .map(|indices| {
+            // For the current classifier, an example is positive iff its index is in the given list
+            let mut labels = vec![false; feature_matrix.rows()];
+            for &i in indices.iter() {
+                labels[i] = true;
+            }
 
-impl Model {
-    /// Remap indices of weight vector.
-    ///
-    /// The mapping is assumed to be well-formed, i.e. sorted, within range, and without duplicates.
-    pub(crate) fn remap_features_indices(self, index_to_feature: &[Index], n_cols: usize) -> Self {
-        let Self { weights, loss_type } = self;
-        let weights = remap_csvec_indices(weights, index_to_feature, n_cols);
-        Self { weights, loss_type }
-    }
-
-    /// Compute score for a given example.
-    pub(crate) fn predict_score(&self, feature_vec: SparseVecView) -> f32 {
-        let p = self.weights.dot(feature_vec);
-        match self.loss_type {
-            LossType::Log => -(-p).exp().ln_1p(),
-            LossType::Hinge => -(1. - p).max(0.).powi(2),
-        }
-    }
-
-    /// Train a binary classifier with liblinear.
-    pub(crate) fn train(
-        feature_matrix: &SparseMatView,
-        labels: &[bool],
-        hyper_param: &HyperParam,
-    ) -> Model {
-        assert!(feature_matrix.is_csr());
-        assert_eq!(feature_matrix.outer_dims(), labels.len());
-
-        let solver = match hyper_param.loss_type {
-            LossType::Hinge => solve_l2r_l2_svc,
-            LossType::Log => solve_l2r_lr_dual,
-        };
-
-        let weights = {
-            let (indices, values) = solver(
+            // Train the classifier
+            solver(
                 feature_matrix,
-                labels,
+                &labels,
                 hyper_param.eps,
                 hyper_param.C,
                 hyper_param.C,
@@ -114,21 +97,37 @@ impl Model {
             )
             .indexed_iter()
             .filter_map(|(index, &value)| {
+                // Prune weights using the given threshold
                 if value.abs() <= hyper_param.weight_threshold {
                     None
                 } else {
                     Some((index as Index, value))
                 }
             })
-            .unzip();
-            SparseVec::new(feature_matrix.cols(), indices, values)
-        };
+            .collect_vec()
+        })
+        .collect::<Vec<_>>();
 
-        Model {
-            weights,
-            loss_type: hyper_param.loss_type,
+    weight_vecs.copy_to_csrmat(feature_matrix.cols())
+}
+
+/// Score an example with all classifiers in the group.
+pub(crate) fn predict_with_classifier_group(
+    feature_vec: SparseVecView,
+    weight_matrix: SparseMatView,
+    loss_type: LossType,
+) -> Vec<f32> {
+    let mut scores = vec![0f32; weight_matrix.rows()];
+    for (i, &v) in csr_mul_csvec(weight_matrix, feature_vec).iter() {
+        scores[i] = v;
+    }
+    for p in &mut scores {
+        *p = match loss_type {
+            LossType::Log => -(-*p).exp().ln_1p(),
+            LossType::Hinge => -(1. - *p).max(0.).powi(2),
         }
     }
+    scores
 }
 
 /// A coordinate descent solver for L2-loss SVM dual problems.

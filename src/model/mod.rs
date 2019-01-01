@@ -3,11 +3,10 @@ pub mod eval;
 pub mod liblinear;
 pub mod train;
 
-use crate::{mat_util::*, Index, IndexValueVec, SparseVecView};
+use crate::{mat_util::*, Index, IndexValueVec, SparseMat, SparseVecView};
 use hashbrown::HashMap;
 use itertools::Itertools;
 use log::info;
-use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::io;
 use std::mem::swap;
@@ -16,7 +15,7 @@ use std::mem::swap;
 pub type TrainHyperParam = train::HyperParam;
 
 /// A Parabel model, which contains a forest of trees.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Model {
     trees: Vec<Tree>,
     n_features: usize,
@@ -36,8 +35,14 @@ impl Model {
         let mut label_to_total_score = HashMap::<Index, f32>::new();
         let tree_predictions: Vec<_> = self
             .trees
-            .par_iter()
-            .map(|tree| tree.predict(feature_vec.view(), beam_size))
+            .iter()
+            .map(|tree| {
+                tree.predict(
+                    feature_vec.view(),
+                    beam_size,
+                    self.hyper_parm.linear.loss_type,
+                )
+            })
             .collect();
         for label_score_pairs in tree_predictions {
             for (label, score) in label_score_pairs {
@@ -85,18 +90,20 @@ impl Model {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 struct Tree {
     root: TreeNode,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 enum TreeNode {
     BranchNode {
-        child_classifier_pairs: [(Box<TreeNode>, liblinear::Model); 2],
+        weight_matrix: SparseMat,
+        children: Vec<TreeNode>,
     },
     LeafNode {
-        label_classifier_pairs: Vec<(Index, liblinear::Model)>,
+        weight_matrix: SparseMat,
+        labels: Vec<Index>,
     },
 }
 
@@ -111,7 +118,12 @@ impl TreeNode {
 }
 
 impl Tree {
-    fn predict(&self, feature_vec: SparseVecView, beam_size: usize) -> IndexValueVec {
+    fn predict(
+        &self,
+        feature_vec: SparseVecView,
+        beam_size: usize,
+        liblinear_loss_type: liblinear::LossType,
+    ) -> IndexValueVec {
         assert!(beam_size > 0);
 
         let mut curr_level = Vec::<(&TreeNode, f32)>::with_capacity(beam_size * 2);
@@ -128,19 +140,29 @@ impl Tree {
                 curr_level.truncate(beam_size);
             }
 
+            // Iterate until we reach the leaves
             if curr_level.first().unwrap().0.is_leaf() {
                 break;
             }
 
             next_level.clear();
-            for &(node, score) in &curr_level {
+            for &(node, node_score) in &curr_level {
                 match node {
                     TreeNode::BranchNode {
-                        child_classifier_pairs,
+                        weight_matrix,
+                        children,
                     } => {
-                        for (child, classifier) in child_classifier_pairs {
-                            next_level.push((child, score + classifier.predict_score(feature_vec)));
+                        let mut child_scores = liblinear::predict_with_classifier_group(
+                            feature_vec,
+                            weight_matrix.view(),
+                            liblinear_loss_type,
+                        );
+                        assert_eq!(child_scores.len(), children.len());
+                        for child_score in &mut child_scores {
+                            *child_score += node_score;
                         }
+
+                        next_level.extend(children.iter().zip_eq(child_scores.into_iter()));
                     }
                     _ => unreachable!("The tree is not a complete binary tree."),
                 }
@@ -151,16 +173,25 @@ impl Tree {
 
         curr_level
             .iter()
-            .flat_map(|&(leaf, score)| match leaf {
+            .flat_map(|&(leaf, leaf_score)| match leaf {
                 TreeNode::LeafNode {
-                    label_classifier_pairs,
-                } => label_classifier_pairs
-                    .iter()
-                    .map(|(label, classifier)| {
-                        let label_score = (score + classifier.predict_score(feature_vec)).exp();
-                        (*label, label_score)
-                    })
-                    .collect_vec(),
+                    weight_matrix,
+                    labels,
+                } => {
+                    let mut label_scores = liblinear::predict_with_classifier_group(
+                        feature_vec,
+                        weight_matrix.view(),
+                        liblinear_loss_type,
+                    );
+                    for label_score in &mut label_scores {
+                        *label_score = (*label_score + leaf_score).exp();
+                    }
+                    labels
+                        .iter()
+                        .cloned()
+                        .zip_eq(label_scores.into_iter())
+                        .collect_vec()
+                }
                 _ => unreachable!("The tree is not a complete binary tree."),
             })
             .collect_vec()

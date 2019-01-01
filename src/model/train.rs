@@ -158,95 +158,77 @@ impl<'a> TreeTrainer<'a> {
             self.train_leaf_node(&examples, &label_cluster.labels)
         } else {
             // Otherwise, branch and train subtrees recursively
-            let [left_cluster, right_cluster] = label_cluster.split(self.hyper_param.cluster_eps);
-            let (left_pair, right_pair) = rayon::join(
-                || self.train_branch_split(height, examples, &left_cluster),
-                || self.train_branch_split(height, examples, &right_cluster),
+            let label_clusters = label_cluster.split(self.hyper_param.cluster_eps);
+            debug_assert_eq!(2, label_clusters.len());
+
+            let example_index_lists = label_clusters
+                .iter()
+                .map(|cluster| examples.find_examples_with_labels(&cluster.labels))
+                .collect::<Vec<_>>();
+
+            let (weight_matrix, children) = rayon::join(
+                || self.train_classifier_group(examples, &example_index_lists),
+                || self.train_child_nodes(height, examples, &label_clusters, &example_index_lists),
             );
+
             TreeNode::BranchNode {
-                child_classifier_pairs: [left_pair, right_pair],
+                weight_matrix,
+                children,
             }
         }
     }
 
-    fn train_leaf_node(&self, examples: &TrainingExamples, leaf_labels: &[Index]) -> TreeNode {
-        let label_classifier_pairs = leaf_labels
-            .par_iter()
-            .map(|&leaf_label| (leaf_label, self.train_leaf_classifier(examples, leaf_label)))
-            .collect();
-
-        self.progress_bar
-            .lock()
-            .unwrap()
-            .add(leaf_labels.len() as u64);
-
-        TreeNode::LeafNode {
-            label_classifier_pairs,
-        }
-    }
-
-    fn train_leaf_classifier(
-        &self,
-        examples: &TrainingExamples,
-        leaf_label: Index,
-    ) -> liblinear::Model {
-        // Train classifier on whether each example has the given label
-        let classifier_labels = examples
-            .label_sets
-            .iter()
-            .map(|example_labels| example_labels.contains(&leaf_label))
-            .collect_vec();
-
-        self.train_classifier(examples, &classifier_labels)
-    }
-
-    fn train_branch_split(
+    fn train_child_nodes(
         &self,
         height: usize,
         examples: &TrainingExamples,
-        split_label_cluster: &LabelCluster,
-    ) -> (Box<TreeNode>, liblinear::Model) {
-        let split_example_indices = examples.find_examples_with_labels(&split_label_cluster.labels);
-        let (subtree, classifier) = rayon::join(
-            || {
-                let split_examples = examples.take_examples_by_indices(&split_example_indices);
-                self.train_subtree(height - 1, &split_examples, split_label_cluster)
-            },
-            || self.train_branch_split_classifier(examples, &split_example_indices),
-        );
-
-        (Box::new(subtree), classifier)
+        label_clusters: &[LabelCluster],
+        example_index_lists: &[Vec<usize>],
+    ) -> Vec<TreeNode> {
+        label_clusters
+            .par_iter()
+            .zip_eq(example_index_lists.par_iter())
+            .map(|(label_cluster, example_indices)| {
+                self.train_subtree(
+                    height - 1,
+                    &examples.take_examples_by_indices(example_indices),
+                    label_cluster,
+                )
+            })
+            .collect()
     }
 
-    fn train_branch_split_classifier(
-        &self,
-        examples: &TrainingExamples,
-        split_example_indices: &[usize],
-    ) -> liblinear::Model {
-        // Train classifier on whether each example belongs to the current split
-        let mut classifier_labels = vec![false; examples.len()];
-        for &i in split_example_indices {
-            classifier_labels[i] = true;
+    fn train_leaf_node(&self, examples: &TrainingExamples, leaf_labels: &[Index]) -> TreeNode {
+        let example_index_lists = leaf_labels
+            .par_iter()
+            .map(|&label| examples.find_examples_with_label(label))
+            .collect::<Vec<_>>();
+        let weight_matrix = self.train_classifier_group(examples, &example_index_lists);
+        TreeNode::LeafNode {
+            weight_matrix,
+            labels: leaf_labels.to_vec(),
         }
-
-        let model = self.train_classifier(examples, &classifier_labels);
-
-        self.progress_bar.lock().unwrap().add(1);
-
-        model
     }
 
-    fn train_classifier(
+    fn train_classifier_group(
         &self,
         examples: &TrainingExamples,
-        classifier_labels: &[bool],
-    ) -> liblinear::Model {
-        liblinear::Model::train(
+        index_lists: &[Vec<usize>],
+    ) -> SparseMat {
+        let weight_matrix = liblinear::train_classifier_group(
             &examples.feature_matrix.view(),
-            &classifier_labels,
+            index_lists,
             &self.classifier_hyper_param(examples.len()),
         )
-        .remap_features_indices(&examples.index_to_feature, self.all_examples.n_features())
+        .remap_column_indices(&examples.index_to_feature, self.all_examples.n_features());
+
+        assert_eq!(weight_matrix.rows(), index_lists.len());
+        self.progress_bar
+            .lock()
+            .unwrap()
+            .add(index_lists.len() as u64);
+
+        weight_matrix
     }
 }
 
@@ -290,6 +272,20 @@ impl<'a> TrainingExamples<'a> {
     #[inline]
     fn n_features(&self) -> usize {
         self.feature_matrix.cols()
+    }
+
+    fn find_examples_with_label(&self, label: Index) -> Vec<usize> {
+        self.label_sets
+            .par_iter()
+            .enumerate()
+            .filter_map(|(i, example_labels)| {
+                if example_labels.contains(&label) {
+                    Some(i)
+                } else {
+                    None
+                }
+            })
+            .collect()
     }
 
     fn find_examples_with_labels(&self, labels: &[Index]) -> Vec<usize> {

@@ -242,25 +242,6 @@ where
     prod
 }
 
-/// Remap indices according to the given mapping.
-///
-/// The mapping is assumed to be well-formed, i.e. sorted, within range, and without duplicates.
-pub fn remap_csvec_indices<N, I>(
-    csvec: CsVecI<N, I>,
-    old_index_to_new: &[I],
-    dim: usize,
-) -> CsVecI<N, I>
-where
-    I: SpIndex,
-    N: Copy,
-{
-    let (mut indices, data) = csvec.into_raw_storage();
-    for index in &mut indices {
-        *index = old_index_to_new[index.index()];
-    }
-    CsVecI::new(dim, indices, data)
-}
-
 pub fn dense_add_assign_csvec<N, I>(mut dense_vec: ArrayViewMut1<N>, csvec: CsVecViewI<N, I>)
 where
     I: sprs::SpIndex,
@@ -417,15 +398,6 @@ mod tests {
                 vec![1, 2, 3, 4, 5],
             ),
             mat.remap_column_indices(&vec![10, 100, 1000], 2000)
-        );
-    }
-
-    #[test]
-    fn test_remap_csvec_indices() {
-        let vec = CsVecI::new(10, vec![1u32, 3, 5], vec![1., 2., 3.]);
-        assert_eq!(
-            CsVecI::new(2000, vec![10, 100, 1000], vec![1., 2., 3.]),
-            remap_csvec_indices(vec, &[0, 10, 0, 100, 0, 1000], 2000)
         );
     }
 
