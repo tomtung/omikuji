@@ -8,11 +8,12 @@ use hashbrown::HashMap;
 use itertools::{izip, Itertools};
 use log::info;
 use rayon::prelude::*;
+use serde::{Deserialize, Serialize};
 use std::iter::FromIterator;
 use std::sync::Mutex;
 
 /// Model training hyper-parameters.
-#[derive(Builder, Copy, Clone, Debug)]
+#[derive(Builder, Copy, Clone, Debug, Serialize, Deserialize)]
 pub struct HyperParam {
     #[builder(default = "3")]
     pub n_trees: usize,
@@ -60,6 +61,7 @@ impl HyperParam {
         Model {
             trees,
             n_features: dataset.n_features,
+            hyper_parm: *self,
         }
     }
 }

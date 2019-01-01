@@ -20,6 +20,7 @@ pub type TrainHyperParam = train::HyperParam;
 pub struct Model {
     trees: Vec<Tree>,
     n_features: usize,
+    hyper_parm: TrainHyperParam,
 }
 
 impl Model {

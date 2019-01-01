@@ -17,7 +17,7 @@ pub enum LossType {
 }
 
 /// Hyper-parameter settings for training liblinear model.
-#[derive(Builder, Copy, Clone, Debug)]
+#[derive(Builder, Copy, Clone, Debug, Serialize, Deserialize)]
 #[allow(non_snake_case)]
 pub struct HyperParam {
     #[builder(default = "LossType::Hinge")]
