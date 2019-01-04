@@ -1,12 +1,10 @@
 use crate::mat_util::*;
-use crate::{Index, SparseMat, SparseMatView, SparseVecView};
+use crate::{DenseVec, DenseVecView, Index, SparseMat, SparseMatView};
 use derive_builder::Builder;
 use itertools::Itertools;
-use ndarray::Array1;
 use rand::prelude::*;
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
-use sprs::prod::csr_mul_csvec;
 use std::f32::{INFINITY, NEG_INFINITY};
 use std::ops::Deref;
 
@@ -112,14 +110,16 @@ pub(crate) fn train_classifier_group<Indices: Deref<Target = [usize]> + Sync>(
 }
 
 /// Score an example with all classifiers in the group.
+///
+/// We use dense vector during prediction time because it's much faster.
 pub(crate) fn predict_with_classifier_group(
-    feature_vec: SparseVecView,
+    feature_vec: DenseVecView,
     weight_matrix: SparseMatView,
     loss_type: LossType,
 ) -> Vec<f32> {
     let mut scores = vec![0f32; weight_matrix.rows()];
-    for (i, &v) in csr_mul_csvec(weight_matrix, feature_vec).iter() {
-        scores[i] = v;
+    for (i, v) in weight_matrix.outer_iterator().enumerate() {
+        scores[i] = v.dot_dense(feature_vec.view());
     }
     for p in &mut scores {
         *p = match loss_type {
@@ -163,13 +163,13 @@ fn solve_l2r_l2_svc(
     cp: f32,
     cn: f32,
     max_iter: u32,
-) -> Array1<f32> {
+) -> DenseVec {
     assert!(x.is_csr());
     assert_eq!(x.rows(), y.len());
 
     let l = x.rows();
     let w_size = x.cols();
-    let mut w = Array1::<f32>::zeros(w_size);
+    let mut w = DenseVec::zeros(w_size);
 
     let mut active_size = l;
 
@@ -281,7 +281,7 @@ fn solve_l2r_lr_dual(
     cp: f32,
     cn: f32,
     max_iter: u32,
-) -> Array1<f32> {
+) -> DenseVec {
     assert!(x.is_csr());
     assert_eq!(x.rows(), y.len());
 
@@ -310,7 +310,7 @@ fn solve_l2r_lr_dual(
         .map(|xi| csvec_dot_self(&xi))
         .collect_vec();
 
-    let mut w = Array1::<f32>::zeros(w_size);
+    let mut w = DenseVec::zeros(w_size);
     for (i, (xi, &yi)) in x.outer_iterator().zip(y.iter()).enumerate() {
         let yi_sign = if yi { 1. } else { -1. };
         dense_add_assign_csvec_mul_scalar(w.view_mut(), xi, yi_sign * alpha[2 * i]);

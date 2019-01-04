@@ -3,7 +3,7 @@ pub mod eval;
 pub mod liblinear;
 pub mod train;
 
-use crate::{mat_util::*, Index, IndexValueVec, SparseMat, SparseVecView};
+use crate::{DenseVec, DenseVecView, Index, IndexValueVec, SparseMat};
 use hashbrown::HashMap;
 use itertools::Itertools;
 use log::info;
@@ -31,7 +31,7 @@ impl Model {
     /// no duplicate or out-of-range indices
     /// * `beam_size` - Beam size for beam search.
     pub fn predict(&self, feature_vec: &[(Index, f32)], beam_size: usize) -> IndexValueVec {
-        let feature_vec = feature_vec.copy_normalized_with_bias_to_csvec(self.n_features);
+        let feature_vec = self.prepare_dense_feature_vec(feature_vec);
         let mut label_to_total_score = HashMap::<Index, f32>::new();
         let tree_predictions: Vec<_> = self
             .trees
@@ -58,6 +58,21 @@ impl Model {
         label_score_pairs
             .sort_unstable_by(|(_, score1), (_, score2)| score2.partial_cmp(score1).unwrap());
         label_score_pairs
+    }
+
+    /// Normalize and densify the sparse feature vector to make prediction more efficient.
+    fn prepare_dense_feature_vec(&self, sparse_vec: &[(Index, f32)]) -> DenseVec {
+        let mut dense_vec = DenseVec::zeros(self.n_features + 1);
+        let norm = sparse_vec
+            .iter()
+            .map(|(_, v)| v.powi(2))
+            .sum::<f32>()
+            .sqrt();
+        for &(index, value) in sparse_vec {
+            dense_vec[index as usize] = value / norm; // l2-normalized
+        }
+        dense_vec[self.n_features] = 1.; // bias
+        dense_vec
     }
 
     /// Serialize model.
@@ -120,12 +135,11 @@ impl TreeNode {
 impl Tree {
     fn predict(
         &self,
-        feature_vec: SparseVecView,
+        feature_vec: DenseVecView,
         beam_size: usize,
         liblinear_loss_type: liblinear::LossType,
     ) -> IndexValueVec {
         assert!(beam_size > 0);
-
         let mut curr_level = Vec::<(&TreeNode, f32)>::with_capacity(beam_size * 2);
         let mut next_level = Vec::<(&TreeNode, f32)>::with_capacity(beam_size * 2);
 
@@ -179,7 +193,7 @@ impl Tree {
                     labels,
                 } => {
                     let mut label_scores = liblinear::predict_with_classifier_group(
-                        feature_vec,
+                        feature_vec.view(),
                         weight_matrix.view(),
                         liblinear_loss_type,
                     );

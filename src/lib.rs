@@ -5,6 +5,8 @@ pub type SparseVec = sprs::CsVecI<f32, Index>;
 pub type SparseVecView<'a> = sprs::CsVecViewI<'a, f32, Index>;
 pub type SparseMat = sprs::CsMatI<f32, Index>;
 pub type SparseMatView<'a> = sprs::CsMatViewI<'a, f32, Index>;
+pub type DenseVec = ndarray::Array1<f32>;
+pub type DenseVecView<'a> = ndarray::ArrayView1<'a, f32>;
 pub type DataSet = data::DataSet;
 pub type Model = model::Model;
 

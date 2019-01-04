@@ -1,8 +1,7 @@
 use bit_set::BitSet;
 use ndarray::ArrayViewMut1;
 use num_traits::{Float, Num, Unsigned};
-use sprs::{CsMatBase, CsMatI, CsVecI, CsVecViewI, SpIndex, SparseMat};
-use std::iter::Sum;
+use sprs::{CsMatBase, CsMatI, CsVecViewI, SpIndex, SparseMat};
 use std::ops::{AddAssign, Deref, DerefMut, DivAssign};
 
 pub trait IndexValuePairs<IndexT: SpIndex + Unsigned, ValueT: Copy>:
@@ -29,21 +28,6 @@ pub trait IndexValuePairs<IndexT: SpIndex + Unsigned, ValueT: Copy>:
         }
 
         true
-    }
-
-    /// Copy data to a new sprs sparse vector object with l2-normalization and appended bias.
-    ///
-    /// This assumes that is_valid_sparse_vec would return true. length here doesn't include bias.
-    fn copy_normalized_with_bias_to_csvec(&self, length: usize) -> CsVecI<ValueT, IndexT>
-    where
-        ValueT: Float + Sum,
-    {
-        let norm = self.iter().map(|(_, v)| v.powi(2)).sum::<ValueT>().sqrt();
-        let (mut indices, mut data): (Vec<IndexT>, Vec<ValueT>) =
-            self.iter().cloned().map(|(i, v)| (i, v / norm)).unzip();
-        indices.push(IndexT::from_usize(length));
-        data.push(ValueT::from(1.).unwrap());
-        CsVecI::new(length.index() + 1, indices, data)
     }
 }
 
@@ -297,14 +281,6 @@ mod tests {
         assert!(vec![(1u32, 0.), (3, 0.), (5, 0.)].is_valid_sparse_vec(6));
         assert!(!vec![(1u32, 0.), (3, 0.), (5, 0.)].is_valid_sparse_vec(5));
         assert!(!vec![(1u32, 0.), (5, 0.), (3, 0.)].is_valid_sparse_vec(6));
-    }
-
-    #[test]
-    fn test_copy_normalized_with_bias_to_csvec() {
-        assert_eq!(
-            CsVecI::new(11, vec![1usize, 3, 10], vec![3. / 5., 4. / 5., 1.]),
-            vec![(1usize, 3.), (3, 4.)].copy_normalized_with_bias_to_csvec(10),
-        );
     }
 
     #[test]
