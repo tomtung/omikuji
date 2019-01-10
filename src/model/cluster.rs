@@ -71,7 +71,7 @@ where
 
         // Update centroid
         dense_add_assign_csvec(
-            centroids.subview_mut(Axis(1), c),
+            centroids.index_axis_mut(Axis(1), c),
             feature_matrix.outer_view(i).unwrap(),
         );
     }
@@ -137,11 +137,11 @@ mod tests {
     use super::*;
     use assert_approx_eq::assert_approx_eq;
     use ndarray::array;
-    use sprs::csr_from_dense;
+    use sprs::CsMat;
 
     #[test]
     fn test_balanced_2means_iterate() {
-        let feature_matrix = csr_from_dense(
+        let feature_matrix = CsMat::csr_from_dense(
             array![
                 [1., 0.],
                 [0., -1.],
@@ -176,7 +176,7 @@ mod tests {
 
     #[test]
     fn test_balanced_2means() {
-        let feature_matrix = csr_from_dense(
+        let feature_matrix = CsMat::csr_from_dense(
             array![
                 [1., 0.],
                 [0., -1.],

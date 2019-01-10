@@ -118,9 +118,7 @@ pub(crate) fn predict_with_classifier_group(
     loss_type: LossType,
 ) -> Vec<f32> {
     let mut scores = vec![0f32; weight_matrix.rows()];
-    for (i, v) in weight_matrix.outer_iterator().enumerate() {
-        scores[i] = v.dot_dense(feature_vec.view());
-    }
+    sprs::prod::mul_acc_mat_vec_csr(weight_matrix, feature_vec.as_slice().unwrap(), &mut scores);
     for p in &mut scores {
         *p = match loss_type {
             LossType::Log => -(-*p).exp().ln_1p(),

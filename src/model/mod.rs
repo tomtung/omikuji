@@ -15,7 +15,7 @@ use std::mem::swap;
 pub type TrainHyperParam = train::HyperParam;
 
 /// A Parabel model, which contains a forest of trees.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Model {
     trees: Vec<Tree>,
     n_features: usize,
@@ -105,12 +105,12 @@ impl Model {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 struct Tree {
     root: TreeNode,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 enum TreeNode {
     BranchNode {
         weight_matrix: SparseMat,

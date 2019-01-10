@@ -269,6 +269,7 @@ where
 mod tests {
     use super::*;
     use ndarray::array;
+    use sprs::CsVecI;
 
     #[test]
     fn test_is_valid_sparse_vec() {

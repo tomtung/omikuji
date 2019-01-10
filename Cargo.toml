@@ -21,8 +21,5 @@ bit-set = "0.5"
 rayon = "1.0"
 derive_builder = "0.7"
 clap = {version = "2.32", features = ["yaml"]}
-
-# A temporary fork with some customizations; hope to merge to upstream eventually
-sprs = { git = "https://github.com/tomtung/sprs.git", branch = "master" }
-# To stay consistent with sprs
-ndarray = "0.11.2"
+sprs = "0.6.3"
+ndarray = "0.12"
