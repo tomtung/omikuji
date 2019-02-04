@@ -1,10 +1,10 @@
 use crate::mat_util::*;
-use crate::util::create_progress_bar;
 use crate::{Index, IndexSet, IndexValueVec};
+use itertools::Itertools;
 use log::info;
-use std::fs::File;
-use std::io::prelude::*;
-use std::io::{BufReader, Error, ErrorKind, Result};
+use rayon::prelude::*;
+use std::fs;
+use std::io::{Error, ErrorKind, Result};
 use time;
 
 pub struct DataSet {
@@ -69,41 +69,43 @@ impl DataSet {
         info!("Loading data from {}", path);
         let start_t = time::precise_time_s();
 
-        let mut lines = BufReader::new(File::open(path)?).lines();
-
+        let file_content = fs::read_to_string(path)?;
+        info!("Parsing data");
+        let lines: Vec<&str> = file_content.par_lines().collect();
         let (n_examples, n_features, n_labels) = {
-            let header_line = lines.next().ok_or(ErrorKind::InvalidData)??;
-            let mut token_iter = header_line.split_whitespace();
-            let n_examples = token_iter
-                .next()
-                .and_then(|s| s.parse::<usize>().ok())
-                .ok_or(ErrorKind::InvalidData)?;
-            let n_features = token_iter
-                .next()
-                .and_then(|s| s.parse::<usize>().ok())
-                .ok_or(ErrorKind::InvalidData)?;
-            let n_labels = token_iter
-                .next()
-                .and_then(|s| s.parse::<usize>().ok())
-                .ok_or(ErrorKind::InvalidData)?;
-            if token_iter.next().is_some() {
-                Err(ErrorKind::InvalidData)?;
+            let tokens = lines[0].split_whitespace().collect_vec();
+            if tokens.len() != 3 {
+                return Err(Error::new(
+                    ErrorKind::InvalidData,
+                    format!(
+                        "Expect header line with 3 space-separated tokens, found {} instead",
+                        tokens.len()
+                    ),
+                ));
             }
+
+            let n_examples = tokens[0].parse::<usize>().or(Err(Error::new(
+                ErrorKind::InvalidData,
+                "Failed to parse number of examples",
+            )))?;
+            let n_features = tokens[1].parse::<usize>().or(Err(Error::new(
+                ErrorKind::InvalidData,
+                "Failed to parse number of features",
+            )))?;
+            let n_labels = tokens[1].parse::<usize>().or(Err(Error::new(
+                ErrorKind::InvalidData,
+                "Failed to parse number of labels",
+            )))?;
 
             (n_examples, n_features, n_labels)
         };
 
-        let mut pb = create_progress_bar(n_examples as u64);
-        let mut feature_lists = Vec::with_capacity(n_examples);
-        let mut label_sets = Vec::with_capacity(n_examples);
-        for line in lines {
-            let (features, labels) = Self::parse_xc_repo_data_line(&line?, n_features)?;
-            feature_lists.push(features);
-            label_sets.push(labels);
-            pb.inc();
-        }
-
-        assert_eq!(feature_lists.len(), label_sets.len());
+        let lines: Vec<_> = lines
+            .into_par_iter()
+            .skip(1)
+            .map(|line| Self::parse_xc_repo_data_line(line, n_features))
+            .collect::<Result<_>>()?;
+        let (feature_lists, label_sets): (Vec<_>, Vec<_>) = lines.into_iter().unzip();
 
         if n_examples != feature_lists.len() {
             return Err(Error::new(
@@ -116,7 +118,6 @@ impl DataSet {
             ));
         }
 
-        pb.finish();
         info!(
             "Loaded {} examples; it took {:.2}s",
             n_examples,
