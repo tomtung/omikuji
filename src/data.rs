@@ -84,18 +84,24 @@ impl DataSet {
                 ));
             }
 
-            let n_examples = tokens[0].parse::<usize>().or(Err(Error::new(
-                ErrorKind::InvalidData,
-                "Failed to parse number of examples",
-            )))?;
-            let n_features = tokens[1].parse::<usize>().or(Err(Error::new(
-                ErrorKind::InvalidData,
-                "Failed to parse number of features",
-            )))?;
-            let n_labels = tokens[1].parse::<usize>().or(Err(Error::new(
-                ErrorKind::InvalidData,
-                "Failed to parse number of labels",
-            )))?;
+            let n_examples = tokens[0].parse::<usize>().or_else(|_| {
+                Err(Error::new(
+                    ErrorKind::InvalidData,
+                    "Failed to parse number of examples",
+                ))
+            })?;
+            let n_features = tokens[1].parse::<usize>().or_else(|_| {
+                Err(Error::new(
+                    ErrorKind::InvalidData,
+                    "Failed to parse number of features",
+                ))
+            })?;
+            let n_labels = tokens[1].parse::<usize>().or_else(|_| {
+                Err(Error::new(
+                    ErrorKind::InvalidData,
+                    "Failed to parse number of labels",
+                ))
+            })?;
 
             (n_examples, n_features, n_labels)
         };
