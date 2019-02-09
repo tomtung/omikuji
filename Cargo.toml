@@ -23,3 +23,9 @@ derive_builder = "0.7"
 clap = {version = "2.32", features = ["yaml"]}
 sprs = "0.6.3"
 ndarray = {version = "0.12", features = ["serde-1"]}
+blas-src = { version = "0.2.0", default-features = false, features = ["openblas"], optional = true }
+openblas-src = { version = "0.6.0", default-features = false, features = ["cblas", "system"], optional = true }
+
+[features]
+# Use OpenBLAS to speed up prediction
+openblas = ["ndarray/blas", "blas-src", "openblas-src"]
