@@ -1,8 +1,32 @@
 use bit_set::BitSet;
 use ndarray::ArrayViewMut1;
 use num_traits::{Float, Num, Unsigned};
+use serde::{Deserialize, Serialize};
 use sprs::{CsMatBase, CsMatI, CsVecViewI, SpIndex, SparseMat};
 use std::ops::{AddAssign, Deref, DerefMut, DivAssign};
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum Mat {
+    Sparse(super::SparseMat),
+    Dense(super::DenseMat),
+}
+
+impl Mat {
+    pub fn dot_vec(&self, vec: super::DenseVecView) -> super::DenseVec {
+        match self {
+            Mat::Sparse(sparse_mat) => {
+                let mut scores = super::DenseVec::zeros(sparse_mat.rows());
+                sprs::prod::mul_acc_mat_vec_csr(
+                    sparse_mat.view(),
+                    vec.as_slice().unwrap(),
+                    scores.as_slice_mut().unwrap(),
+                );
+                scores
+            }
+            Mat::Dense(dense_mat) => dense_mat.dot(&vec),
+        }
+    }
+}
 
 pub trait IndexValuePairs<IndexT: SpIndex + Unsigned, ValueT: Copy>:
     Deref<Target = [(IndexT, ValueT)]>

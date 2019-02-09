@@ -3,7 +3,7 @@ pub mod eval;
 pub mod liblinear;
 pub mod train;
 
-use crate::{DenseVec, DenseVecView, Index, IndexValueVec, SparseMat};
+use crate::{DenseVec, DenseVecView, Index, IndexValueVec, Mat};
 use hashbrown::HashMap;
 use itertools::Itertools;
 use log::info;
@@ -113,11 +113,11 @@ struct Tree {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 enum TreeNode {
     BranchNode {
-        weight_matrix: SparseMat,
+        weight_matrix: Mat,
         children: Vec<TreeNode>,
     },
     LeafNode {
-        weight_matrix: SparseMat,
+        weight_matrix: Mat,
         labels: Vec<Index>,
     },
 }
@@ -168,15 +168,12 @@ impl Tree {
                     } => {
                         let mut child_scores = liblinear::predict_with_classifier_group(
                             feature_vec,
-                            weight_matrix.view(),
+                            &weight_matrix,
                             liblinear_loss_type,
                         );
-                        assert_eq!(child_scores.len(), children.len());
-                        for child_score in &mut child_scores {
-                            *child_score += node_score;
-                        }
-
-                        next_level.extend(children.iter().zip_eq(child_scores.into_iter()));
+                        child_scores += node_score;
+                        next_level
+                            .extend(children.iter().zip_eq(child_scores.into_iter().cloned()));
                     }
                     _ => unreachable!("The tree is not a complete binary tree."),
                 }
@@ -194,16 +191,14 @@ impl Tree {
                 } => {
                     let mut label_scores = liblinear::predict_with_classifier_group(
                         feature_vec.view(),
-                        weight_matrix.view(),
+                        &weight_matrix,
                         liblinear_loss_type,
                     );
-                    for label_score in &mut label_scores {
-                        *label_score = (*label_score + leaf_score).exp();
-                    }
+                    label_scores.mapv_inplace(|v| (v + leaf_score).exp());
                     labels
                         .iter()
                         .cloned()
-                        .zip_eq(label_scores.into_iter())
+                        .zip_eq(label_scores.into_iter().cloned())
                         .collect_vec()
                 }
                 _ => unreachable!("The tree is not a complete binary tree."),

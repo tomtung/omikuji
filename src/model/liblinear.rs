@@ -114,16 +114,13 @@ pub(crate) fn train_classifier_group<Indices: Deref<Target = [usize]> + Sync>(
 /// We use dense vector during prediction time because it's much faster.
 pub(crate) fn predict_with_classifier_group(
     feature_vec: DenseVecView,
-    weight_matrix: SparseMatView,
+    weight_matrix: &Mat,
     loss_type: LossType,
-) -> Vec<f32> {
-    let mut scores = vec![0f32; weight_matrix.rows()];
-    sprs::prod::mul_acc_mat_vec_csr(weight_matrix, feature_vec.as_slice().unwrap(), &mut scores);
-    for p in &mut scores {
-        *p = match loss_type {
-            LossType::Log => -(-*p).exp().ln_1p(),
-            LossType::Hinge => -(1. - *p).max(0.).powi(2),
-        }
+) -> DenseVec {
+    let mut scores = weight_matrix.dot_vec(feature_vec);
+    match loss_type {
+        LossType::Log => scores.mapv_inplace(|v| -(-v).exp().ln_1p()),
+        LossType::Hinge => scores.mapv_inplace(|v| -(1. - v).max(0.).powi(2)),
     }
     scores
 }

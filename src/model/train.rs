@@ -2,7 +2,7 @@ use super::{cluster, liblinear, Model, Tree, TreeNode};
 use crate::data::DataSet;
 use crate::mat_util::*;
 use crate::util::{create_progress_bar, ProgressBar};
-use crate::{Index, IndexSet, IndexValueVec, SparseMat};
+use crate::{Index, IndexSet, IndexValueVec, Mat, SparseMat};
 use derive_builder::Builder;
 use hashbrown::HashMap;
 use itertools::{izip, Itertools};
@@ -214,7 +214,7 @@ impl<'a> TreeTrainer<'a> {
         &self,
         examples: &TrainingExamples,
         index_lists: &[Vec<usize>],
-    ) -> SparseMat {
+    ) -> Mat {
         let weight_matrix = liblinear::train_classifier_group(
             &examples.feature_matrix.view(),
             index_lists,
@@ -228,7 +228,14 @@ impl<'a> TreeTrainer<'a> {
             .unwrap()
             .add(index_lists.len() as u64);
 
-        weight_matrix
+        // Store as dense matrix if not sparse enough, which greatly speeds up prediction
+        let density =
+            weight_matrix.nnz() as f32 / (weight_matrix.rows() * weight_matrix.cols()) as f32;
+        if density < 0.25 {
+            Mat::Sparse(weight_matrix)
+        } else {
+            Mat::Dense(weight_matrix.to_dense())
+        }
     }
 }
 
