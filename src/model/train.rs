@@ -10,7 +10,7 @@ use log::info;
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::iter::FromIterator;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 /// Model training hyper-parameters.
 #[derive(Builder, Copy, Clone, Debug, Serialize, Deserialize)]
@@ -67,8 +67,8 @@ impl HyperParam {
 }
 
 struct TreeTrainer<'a> {
-    all_examples: TrainingExamples<'a>,
-    all_labels: LabelCluster,
+    all_examples: Arc<TrainingExamples<'a>>,
+    all_labels: Arc<LabelCluster>,
     tree_height: usize,
     hyper_param: HyperParam,
     progress_bar: Mutex<ProgressBar>,
@@ -86,7 +86,10 @@ impl<'a> TreeTrainer<'a> {
             .par_iter_mut()
             .for_each(|v| v.l2_normalize());
         // Initialize label clusters
-        let all_labels = LabelCluster::new_from_dataset(dataset, hyper_param.centroid_threshold);
+        let all_labels = Arc::new(LabelCluster::new_from_dataset(
+            dataset,
+            hyper_param.centroid_threshold,
+        ));
 
         // Append bias term to each vector to make training linear classifiers easier
         let bias_index = dataset.n_features as Index;
@@ -95,7 +98,7 @@ impl<'a> TreeTrainer<'a> {
             .iter_mut()
             .for_each(|v| v.push((bias_index, 1.)));
         // Initialize examples set
-        let all_examples = TrainingExamples::new_from_dataset(dataset);
+        let all_examples = Arc::new(TrainingExamples::new_from_dataset(dataset));
 
         let tree_height = Self::compute_tree_height(all_labels.len(), hyper_param.max_leaf_size);
 
@@ -142,24 +145,29 @@ impl<'a> TreeTrainer<'a> {
 
     fn train(&self) -> Tree {
         Tree {
-            root: self.train_subtree(self.tree_height, &self.all_examples, &self.all_labels),
+            root: self.train_subtree(
+                self.tree_height,
+                self.all_examples.clone(),
+                self.all_labels.clone(),
+            ),
         }
     }
 
     fn train_subtree(
         &self,
         height: usize,
-        examples: &TrainingExamples,
-        label_cluster: &LabelCluster,
+        examples: Arc<TrainingExamples>,
+        label_cluster: Arc<LabelCluster>,
     ) -> TreeNode {
         if height == 0 {
             // If reached maximum depth, build and return a leaf node
             assert!(label_cluster.labels.len() <= self.hyper_param.max_leaf_size);
-            self.train_leaf_node(&examples, &label_cluster.labels)
+            self.train_leaf_node(examples, &label_cluster.labels)
         } else {
             // Otherwise, branch and train subtrees recursively
             let label_clusters = label_cluster.split(self.hyper_param.cluster_eps);
             debug_assert_eq!(2, label_clusters.len());
+            drop(label_cluster); // No longer needed
 
             let example_index_lists = label_clusters
                 .par_iter()
@@ -167,8 +175,18 @@ impl<'a> TreeTrainer<'a> {
                 .collect::<Vec<_>>();
 
             let (weight_matrix, children) = rayon::join(
-                || self.train_classifier_group(examples, &example_index_lists),
-                || self.train_child_nodes(height, examples, &label_clusters, &example_index_lists),
+                {
+                    let examples = examples.clone();
+                    || self.train_classifier_group(examples, &example_index_lists)
+                },
+                || {
+                    self.train_child_nodes(
+                        height,
+                        examples, // NB: the Arc "examples" is moved into this closure
+                        label_clusters,
+                        &example_index_lists,
+                    )
+                },
             );
 
             TreeNode::BranchNode {
@@ -181,24 +199,26 @@ impl<'a> TreeTrainer<'a> {
     fn train_child_nodes(
         &self,
         height: usize,
-        examples: &TrainingExamples,
-        label_clusters: &[LabelCluster],
+        examples: Arc<TrainingExamples>,
+        label_clusters: Vec<LabelCluster>,
         example_index_lists: &[Vec<usize>],
     ) -> Vec<TreeNode> {
         label_clusters
-            .par_iter()
+            .into_par_iter()
             .zip_eq(example_index_lists.par_iter())
-            .map(|(label_cluster, example_indices)| {
+            .map_with(examples, |examples, (label_cluster, example_indices)| {
+                let cluster_examples = examples.take_examples_by_indices(example_indices);
+                drop(examples); // No longer needed
                 self.train_subtree(
                     height - 1,
-                    &examples.take_examples_by_indices(example_indices),
-                    label_cluster,
+                    Arc::new(cluster_examples),
+                    Arc::new(label_cluster),
                 )
             })
             .collect()
     }
 
-    fn train_leaf_node(&self, examples: &TrainingExamples, leaf_labels: &[Index]) -> TreeNode {
+    fn train_leaf_node(&self, examples: Arc<TrainingExamples>, leaf_labels: &[Index]) -> TreeNode {
         let example_index_lists = leaf_labels
             .par_iter()
             .map(|&label| examples.find_examples_with_label(label))
@@ -212,7 +232,7 @@ impl<'a> TreeTrainer<'a> {
 
     fn train_classifier_group(
         &self,
-        examples: &TrainingExamples,
+        examples: Arc<TrainingExamples>,
         index_lists: &[Vec<usize>],
     ) -> Mat {
         let weight_matrix = liblinear::train_classifier_group(
@@ -390,7 +410,7 @@ impl LabelCluster {
         self.feature_matrix.rows()
     }
 
-    fn split(&self, cluster_eps: f32) -> [Self; 2] {
+    fn split(&self, cluster_eps: f32) -> Vec<Self> {
         let label_assignments = cluster::balanced_2means(&self.feature_matrix.view(), cluster_eps);
         assert_eq!(self.labels.len(), label_assignments.len());
 
@@ -398,7 +418,7 @@ impl LabelCluster {
             (0..self.labels.len()).partition::<Vec<_>, _>(|&i| label_assignments[i]);
         assert!(((true_indices.len() as i64) - (false_indices.len() as i64)).abs() <= 1);
 
-        [
+        vec![
             self.take_labels_by_indices(&true_indices),
             self.take_labels_by_indices(&false_indices),
         ]
