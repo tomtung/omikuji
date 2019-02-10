@@ -162,7 +162,7 @@ impl<'a> TreeTrainer<'a> {
             debug_assert_eq!(2, label_clusters.len());
 
             let example_index_lists = label_clusters
-                .iter()
+                .par_iter()
                 .map(|cluster| examples.find_examples_with_labels(&cluster.labels))
                 .collect::<Vec<_>>();
 

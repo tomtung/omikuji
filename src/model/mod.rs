@@ -7,6 +7,7 @@ use crate::{DenseVec, DenseVecView, Index, IndexValueVec, Mat};
 use hashbrown::HashMap;
 use itertools::Itertools;
 use log::info;
+use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::io;
 use std::mem::swap;
@@ -35,7 +36,7 @@ impl Model {
         let mut label_to_total_score = HashMap::<Index, f32>::new();
         let tree_predictions: Vec<_> = self
             .trees
-            .iter()
+            .par_iter()
             .map(|tree| {
                 tree.predict(
                     feature_vec.view(),
