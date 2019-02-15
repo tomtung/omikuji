@@ -5,27 +5,35 @@ edition = "2018"
 authors = ["Tom Dong <tom.tung.dyb@gmail.com>"]
 
 [dependencies]
-serde = { version = '1.0', features = ['derive'] }
 bincode = "1.0"
-pbr = "1.0"
-log = "0.4"
-simple_logger = "0.5"
-time = "0.1"
-rand = "0.6"
-order-stat = "0.1"
-assert_approx_eq = "1.0"
-itertools = "0.7"
-hashbrown = "0.1"
-num-traits = "0.2"
 bit-set = "0.5"
-rayon = "1.0"
-derive_builder = "0.7"
-clap = {version = "2.32", features = ["yaml"]}
-sprs = "0.6.3"
-ndarray = {version = "0.12", features = ["serde-1"]}
 blas-src = { version = "0.2.0", default-features = false, features = ["openblas"], optional = true }
+clap = { version = "2.32", features = ["yaml"], optional = true }
+derive_builder = "0.7"
+hashbrown = "0.1"
+itertools = "0.7"
+log = "0.4"
+ndarray = { version = "0.12", features = ["serde-1"] }
+num-traits = "0.2"
 openblas-src = { version = "0.6.0", default-features = false, features = ["cblas", "system"], optional = true }
+order-stat = "0.1"
+pbr = "1.0"
+rand = "0.6"
+rayon = "1.0"
+serde = { version = '1.0', features = ['derive'] }
+simple_logger = { version = "0.5", optional = true }
+sprs = "0.6.3"
+time = "0.1"
+
+[dev-dependencies]
+assert_approx_eq = "1.0"
+
+[[bin]]
+name = "parabel"
+path = "src/bin/parabel.rs"
+required-features = ["cli"]
 
 [features]
+cli = ["simple_logger", "clap"]
 # Use OpenBLAS to speed up prediction
 openblas = ["ndarray/blas", "blas-src", "openblas-src"]

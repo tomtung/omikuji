@@ -26,7 +26,7 @@ Note that since the C++ implementation trains each tree single-threaded, the num
 ## Build
 The project can be easily built with [Cargo](https://doc.rust-lang.org/cargo/getting-started/installation.html):
 ```
-$ cargo build --release
+$ cargo build --features "cli" --release
 ```
 
 The compiled binary file will be available at `target/release/parabel`.
