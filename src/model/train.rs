@@ -203,10 +203,13 @@ impl<'a> TreeTrainer<'a> {
         label_clusters: Vec<LabelCluster>,
         example_index_lists: &[Vec<usize>],
     ) -> Vec<TreeNode> {
+        // NB: the examples arc itself is moved when creating this vector of clones
+        let example_arcs = vec![examples; label_clusters.len()];
         label_clusters
             .into_par_iter()
             .zip_eq(example_index_lists.par_iter())
-            .map_with(examples, |examples, (label_cluster, example_indices)| {
+            .zip_eq(example_arcs.into_par_iter())
+            .map(|((label_cluster, example_indices), examples)| {
                 let cluster_examples = examples.take_examples_by_indices(example_indices);
                 drop(examples); // No longer needed
                 self.train_subtree(
