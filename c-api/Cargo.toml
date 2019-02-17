@@ -1,0 +1,26 @@
+[package]
+name = "parabel_c-api"
+version = "0.0.1"
+edition = "2018"
+authors = ["Tom Dong <tom.tung.dyb@gmail.com>"]
+
+[lib]
+name = "parabel"
+crate-type = ["staticlib", "cdylib"]
+
+[dependencies]
+itertools = "0.7"
+libc = "0.2"
+parabel = { version = "0", path = ".." }
+rayon = "1.0"
+simple_logger = "0.5"
+
+[build-dependencies]
+cbindgen = "0.8"
+
+[profile.release]
+panic = "abort"
+
+[features]
+# Use OpenBLAS to speed up prediction
+openblas = ["parabel/openblas"]

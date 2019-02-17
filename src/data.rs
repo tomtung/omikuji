@@ -7,6 +7,7 @@ use std::fs;
 use std::io::{Error, ErrorKind, Result};
 use time;
 
+#[derive(Clone)]
 pub struct DataSet {
     pub n_features: usize,
     pub n_labels: usize,
