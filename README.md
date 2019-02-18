@@ -15,21 +15,56 @@ This Rust implementation has been tested on datasets from the [Extreme Classific
 | WikiLSHTC-325K |      Rust      |     733.5s    | 65.02 | 43.16 | 32.08 |
 |                |      C++       |    1079.0s    | 65.05 | 43.23 | 32.05 |
 
-The tests were run on a quad-core Intel® Core™ i7-6700 CPU. For both implementations, we used the default hyper-parameter settings, and tried to utilize as many CPU cores as possible. For example, to reproduce the results on the EURLex-4K dataset using our Rust implementation:
+The tests were run on a quad-core Intel® Core™ i7-6700 CPU. For both implementations, we used the default hyper-parameter settings, and tried to utilize as many CPU cores as possible.
+
+Note that since the C++ implementation trains each tree single-threaded, the number of CPU cores it can utilize is limited to the number of trees (3 by default). In contrast, our Rust implementation is able to utilize **all available CPU cores** whenever possible. On our quad-core machine, this resulted in a **1.3x to 1.5x speed up**; further speed-up is possible with more CPU cores available.
+
+## Build & Install
+Parabel-rs can be easily built & installed with [Cargo](https://doc.rust-lang.org/cargo/getting-started/installation.html) as a CLI app:
 ```
-parabel train data/EURLex-4K/train.txt --model_path model.bin
-parabel test model.bin data/EURLex-4K/test.txt --out_path predictions.txt
+cargo install --git https://github.com/tomtung/parabel-rs.git --features cli
 ```
 
-Note that since the C++ implementation trains each tree single-threaded, the number of CPU cores it can utilize is limited to the number of trees (3 by default). In contrast, our Rust implementation is able to utilize **all available CPU cores** whenever possible. On our quad-core machine, this resulted in a **1.3x to 1.5x speed up**.
-
-## Build
-The project can be easily built with [Cargo](https://doc.rust-lang.org/cargo/getting-started/installation.html):
+The CLI app will be available as `parabel`. For example, to reproduce the results on the EURLex-4K dataset:
 ```
-$ cargo build --features "cli" --release
+parabel train eurlex_train.txt --model_path model.bin
+parabel test model.bin eurlex_test.txt --out_path predictions.txt
 ```
 
-The compiled binary file will be available at `target/release/parabel`.
+
+### Python Binding
+
+A simple Python binding is also available for training and prediction. It can be install via `pip`:
+
+```
+pip install git+https://github.com/tomtung/parabel-rs.git#subdirectory=python -v
+```
+
+The following script demonstrates how to use the Python binding to train a model and make predictions:
+
+```python
+import parabel
+
+# Train
+trainer = parabel.Trainer()
+model = trainer.train_on_data("./eurlex_train.txt")
+
+# Serialize & de-serialize
+model.save("model.bin")
+model = parabel.Model.load("model.bin")
+
+# Predict
+feature_value_pairs = [
+    (0, 0.101468),
+    (1, 0.554374),
+    (2, 0.235760),
+    (3, 0.065255),
+    (8, 0.152305),
+    (10, 0.155051),
+    # ...
+]
+label_score_pairs =  model.predict(feature_value_pairs)
+```
 
 ## Usage
 ```
