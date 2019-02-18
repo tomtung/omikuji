@@ -1,5 +1,13 @@
 from ._libparabel import lib, ffi
-from dataclasses import dataclass
+
+try:
+    from dataclasses import dataclass
+except ImportError:
+    # Give up on the niceties of dataclass for Python <3.7
+    def dataclass(cls):
+        return cls
+
+
 from enum import Enum
 
 
