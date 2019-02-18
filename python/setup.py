@@ -23,6 +23,5 @@ setup(
     zip_safe=False,
     playforms="any",
     setup_requires=["milksnake"],
-    install_requires=["milksnake"],
     milksnake_tasks=[build_native],
 )
