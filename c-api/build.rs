@@ -11,7 +11,7 @@ fn main() {
         .with_include_guard("PARABEL_H")
         .generate()
         .expect("Unable to generate C bindings")
-        .write_to_file("include/parabel.h");
+        .write_to_file("target/include/parabel.h");
 
     cbindgen::Builder::new()
         .with_crate(&crate_dir)
@@ -20,5 +20,5 @@ fn main() {
         .with_namespace("parabel")
         .generate()
         .expect("Unable to generate C++ bindings")
-        .write_to_file("include/parabel.hpp");
+        .write_to_file("target/include/parabel.hpp");
 }
