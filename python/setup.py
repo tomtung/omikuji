@@ -1,10 +1,20 @@
 from setuptools import setup
+import sys
+
+# Add option to enable OpenBLAS; a bit hacky but works
+if "--with-openblas" in sys.argv:
+    with_openblas = True
+    sys.argv.remove("--with-openblas")
+else:
+    with_openblas = False
 
 
 def build_native(spec):
-    build = spec.add_external_build(
-        cmd=["cargo", "build", "--release"], path="../c-api"
-    )
+    cmd = ["cargo", "build", "--release"]
+    if with_openblas:
+        cmd.extend(["--features", "openblas"])
+
+    build = spec.add_external_build(cmd=cmd, path="../c-api")
 
     spec.add_cffi_module(
         module_path="parabel._libparabel",
