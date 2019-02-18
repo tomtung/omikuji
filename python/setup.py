@@ -31,7 +31,7 @@ setup(
     version="0.0.1",
     packages=["parabel"],
     zip_safe=False,
-    playforms="any",
+    platforms="any",
     setup_requires=["milksnake"],
     milksnake_tasks=[build_native],
 )
