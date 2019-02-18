@@ -248,7 +248,7 @@ impl<'a> TreeTrainer<'a> {
         assert_eq!(weight_matrix.rows(), index_lists.len());
         self.progress_bar
             .lock()
-            .unwrap()
+            .expect("Failed to lock progress bar")
             .add(index_lists.len() as u64);
 
         // Store as dense matrix if not sparse enough, which greatly speeds up prediction

@@ -18,8 +18,11 @@ impl Mat {
                 let mut scores = super::DenseVec::zeros(sparse_mat.rows());
                 sprs::prod::mul_acc_mat_vec_csr(
                     sparse_mat.view(),
-                    vec.as_slice().unwrap(),
-                    scores.as_slice_mut().unwrap(),
+                    vec.as_slice()
+                        .expect("Dense vector must be contiguous and in standard order"),
+                    scores
+                        .as_slice_mut()
+                        .expect("We should've created dense vector `scores` to be contiguous and in standard order"),
                 );
                 scores
             }

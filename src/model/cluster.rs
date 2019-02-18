@@ -6,6 +6,7 @@ use order_stat::kth_by;
 use rand::prelude::*;
 use sprs::prod::csr_mulacc_dense_colmaj;
 use sprs::{CsMatViewI, SpIndex};
+use std::fmt::Display;
 use std::ops::{AddAssign, DivAssign};
 
 fn balanced_2means_iterate<N, I>(
@@ -17,7 +18,7 @@ fn balanced_2means_iterate<N, I>(
 ) -> N
 where
     I: SpIndex,
-    N: Float + AddAssign + DivAssign + ScalarOperand,
+    N: Float + AddAssign + DivAssign + ScalarOperand + Display,
 {
     debug_assert!(feature_matrix.is_csr());
     debug_assert!(feature_matrix.rows() >= 2);
@@ -53,7 +54,8 @@ where
     // Reorder by differences, where the two halves will be assigned different partitions
     let mid_rank = n_examples / 2 - 1;
     kth_by(index_diff_pairs, mid_rank, |(_, ld), (_, rd)| {
-        rd.partial_cmp(ld).unwrap()
+        rd.partial_cmp(ld)
+            .unwrap_or_else(|| panic!("Numeric error: unable to compare {} and {}", ld, rd))
     });
 
     // Re-assign partitions and compute new centroids accordingly
@@ -72,7 +74,13 @@ where
         // Update centroid
         dense_add_assign_csvec(
             centroids.index_axis_mut(Axis(1), c),
-            feature_matrix.outer_view(i).unwrap(),
+            feature_matrix.outer_view(i).unwrap_or_else(|| {
+                panic!(
+                    "Failed to take {}-th outer view for feature_matrix of shape {:?}",
+                    i,
+                    feature_matrix.shape()
+                )
+            }),
         );
     }
 
@@ -82,7 +90,9 @@ where
         .into_iter()
         .foreach(dense_vec_l2_normalize);
 
-    total_similarities / N::from(n_examples).unwrap()
+    total_similarities
+        / N::from(n_examples)
+            .unwrap_or_else(|| panic!("Failed to convert {} to generic type N", n_examples))
 }
 
 /// Cluster vectors into 2 balanced subsets.
@@ -91,7 +101,7 @@ where
 pub fn balanced_2means<N, I>(feature_matrix: &CsMatViewI<N, I>, threshold: N) -> Vec<bool>
 where
     I: SpIndex,
-    N: Float + AddAssign + DivAssign + ScalarOperand,
+    N: Float + AddAssign + DivAssign + ScalarOperand + Display,
 {
     assert!(feature_matrix.is_csr());
 
@@ -105,10 +115,19 @@ where
         rand::seq::index::sample(&mut thread_rng(), n_examples, 2).into_iter(),
         centroids.gencolumns_mut()
     ) {
-        dense_add_assign_csvec(c, feature_matrix.outer_view(i).unwrap());
+        dense_add_assign_csvec(
+            c,
+            feature_matrix.outer_view(i).unwrap_or_else(|| {
+                panic!(
+                    "Failed to take {}-th outer view for feature_matrix of shape {:?}",
+                    i,
+                    feature_matrix.shape()
+                )
+            }),
+        );
     }
 
-    let mut prev_avg_similarity = N::from(-2.).unwrap();
+    let mut prev_avg_similarity = N::from(-2.).expect("Failed to convert -2. to generic type N");
     let mut partitions = vec![false; n_examples];
 
     // Temporary workspace; declared here to only allocate once
@@ -122,7 +141,10 @@ where
             similarities.view_mut(),
             &mut index_diff_pairs,
         );
-        assert!(avg_similarity + N::from(1e-3).unwrap() >= prev_avg_similarity);
+        assert!(
+            avg_similarity + N::from(1e-3).expect("Failed to convert 1e-3 to generic type N")
+                >= prev_avg_similarity
+        );
         // Stop iteration if converged
         if avg_similarity - prev_avg_similarity < threshold {
             return partitions;

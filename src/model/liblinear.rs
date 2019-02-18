@@ -39,7 +39,9 @@ pub struct HyperParam {
 
 impl Default for HyperParam {
     fn default() -> Self {
-        HyperParamBuilder::default().build().unwrap()
+        HyperParamBuilder::default()
+            .build()
+            .expect("Failed to build default hyper-parameter")
     }
 }
 
@@ -200,7 +202,13 @@ fn solve_l2r_l2_svc(
             let i = index[s];
             let yi = y[i];
             let yi_sign = if yi { 1. } else { -1. };
-            let xi = x.outer_view(i).unwrap();
+            let xi = x.outer_view(i).unwrap_or_else(|| {
+                panic!(
+                    "Failed to take {}-th outer view for matrix x of shape {:?}",
+                    i,
+                    x.shape()
+                )
+            });
             let alpha_i = &mut alpha[i];
 
             let g = yi_sign * xi.dot_dense(w.view()) - 1. + *alpha_i * diag[yi as usize];
@@ -323,7 +331,13 @@ fn solve_l2r_lr_dual(
             let yi = y[i];
             let yi_sign = if yi { 1. } else { -1. };
             let c = upper_bound[yi as usize];
-            let xi = x.outer_view(i).unwrap();
+            let xi = x.outer_view(i).unwrap_or_else(|| {
+                panic!(
+                    "Failed to take {}-th outer view for matrix x of shape {:?}",
+                    i,
+                    x.shape()
+                )
+            });
             let a = xtx[i];
             let b = yi_sign * xi.dot_dense(w.view());
 

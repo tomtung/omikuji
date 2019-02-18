@@ -25,15 +25,20 @@ impl DataSet {
 
         let mut labels = IndexSet::new();
         {
-            let labels_str = token_iter.next().ok_or(ErrorKind::InvalidData)?;
+            let labels_str = token_iter.next().ok_or_else(|| {
+                Error::new(
+                    ErrorKind::InvalidData,
+                    format!("Failed to find labels in line: \"{}\"", line),
+                )
+            })?;
             for label_str in labels_str.split(',') {
                 if !label_str.is_empty() {
-                    labels.insert(
-                        label_str
-                            .parse::<Index>()
-                            .ok()
-                            .ok_or(ErrorKind::InvalidData)?,
-                    );
+                    labels.insert(label_str.parse::<Index>().map_err(|_| {
+                        Error::new(
+                            ErrorKind::InvalidData,
+                            format!("Failed to parse label {} in line \"{}\"", label_str, line),
+                        )
+                    })?);
                 }
             }
             labels.shrink_to_fit();
@@ -46,19 +51,35 @@ impl DataSet {
                 let feature = feature_value_pair_iter
                     .next()
                     .and_then(|s| s.parse::<Index>().ok())
-                    .ok_or(ErrorKind::InvalidData)?;
+                    .ok_or_else(|| {
+                        Error::new(
+                            ErrorKind::InvalidData,
+                            format!("Failed to parse feature {}", feature_value_pair_str),
+                        )
+                    })?;
                 let value = feature_value_pair_iter
                     .next()
                     .and_then(|s| s.parse::<f32>().ok())
-                    .ok_or(ErrorKind::InvalidData)?;
+                    .ok_or_else(|| {
+                        Error::new(
+                            ErrorKind::InvalidData,
+                            format!("Failed to parse feature value {}", feature_value_pair_str),
+                        )
+                    })?;
                 if feature_value_pair_iter.next().is_some() {
-                    Err(ErrorKind::InvalidData)?;
+                    return Err(Error::new(
+                        ErrorKind::InvalidData,
+                        format!("Failed to parse feature {}", feature_value_pair_str),
+                    ));
                 }
                 features.push((feature, value));
             }
             features.sort_by_index();
             if !features.is_valid_sparse_vec(n_features) {
-                Err(ErrorKind::InvalidData)?;
+                return Err(Error::new(
+                    ErrorKind::InvalidData,
+                    format!("Feature vector is invalid in line {}", line),
+                ));
             }
         }
 
@@ -118,7 +139,7 @@ impl DataSet {
             return Err(Error::new(
                 ErrorKind::InvalidData,
                 format!(
-                    "Expected {} examples, only read {} lines",
+                    "Expected {} examples, but read {}",
                     n_examples,
                     feature_lists.len()
                 ),

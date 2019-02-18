@@ -41,7 +41,7 @@ pub fn test_all(
         .par_iter()
         .map(|feature_vec| {
             let predictions = model.predict(feature_vec, beam_size);
-            pb.lock().unwrap().add(1);
+            pb.lock().expect("Failed to lock progress bar").add(1);
             predictions
         })
         .collect::<Vec<_>>();
