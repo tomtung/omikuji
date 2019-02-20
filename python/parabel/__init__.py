@@ -1,3 +1,6 @@
+__version__ = "0.0.1"
+__all__ = ["Model", "LossType", "Trainer", "init_rayon_threads"]
+
 from ._libparabel import lib, ffi
 
 try:
