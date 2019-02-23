@@ -12,9 +12,6 @@ pub enum ParabelModel {}
 #[no_mangle]
 pub enum ParabelDataSet {}
 
-#[no_mangle]
-pub enum ParabelTrainer {}
-
 /// Load parabel model from file of the given path.
 #[no_mangle]
 pub unsafe extern "C" fn load_parabel_model(path: *const c_char) -> *mut ParabelModel {
@@ -141,9 +138,9 @@ pub enum LossType {
     Log = 1,
 }
 
-/// Create model trainer from the given hyper-parameters.
+/// Train parabel model on the given data set and hyper-parameters.
 #[no_mangle]
-pub extern "C" fn create_parabel_trainer(
+pub unsafe extern "C" fn train_parabel_model(
     n_trees: size_t,
     max_leaf_size: size_t,
     cluster_eps: c_float,
@@ -153,52 +150,38 @@ pub extern "C" fn create_parabel_trainer(
     linear_c: c_float,
     linear_weight_threshold: c_float,
     linear_max_iter: uint32_t,
-) -> *mut ParabelTrainer {
-    let liblinear_hyperparam = {
-        parabel::model::liblinear::HyperParam::builder()
-            .loss_type(match linear_loss_type {
-                LossType::Hinge => parabel::model::liblinear::LossType::Hinge,
-                LossType::Log => parabel::model::liblinear::LossType::Log,
-            })
-            .eps(linear_eps)
-            .C(linear_c)
-            .weight_threshold(linear_weight_threshold)
-            .max_iter(linear_max_iter)
-            .build()
-            .expect("Failed to set hyper-parameters for linear classifiers.")
-    };
-
-    Box::into_raw(Box::new(
-        parabel::model::TrainHyperParam::builder()
-            .linear(liblinear_hyperparam)
-            .n_trees(n_trees)
-            .max_leaf_size(max_leaf_size)
-            .cluster_eps(cluster_eps)
-            .centroid_threshold(centroid_threshold)
-            .build()
-            .expect("Failed to set model hyper-parameters."),
-    )) as *mut ParabelTrainer
-}
-
-/// Free parabel trainer.
-#[no_mangle]
-pub unsafe extern "C" fn free_parabel_trainer(trainer_ptr: *mut ParabelTrainer) {
-    if !trainer_ptr.is_null() {
-        let trainer_ptr = trainer_ptr as *mut parabel::model::TrainHyperParam;
-        drop(Box::from_raw(trainer_ptr));
-    }
-}
-
-/// Train parabel model on the given data set.
-#[no_mangle]
-pub unsafe extern "C" fn train_parabel_model(
-    trainer_ptr: *const ParabelTrainer,
     dataset_ptr: *const ParabelDataSet,
 ) -> *mut ParabelModel {
-    let trainer_ptr = trainer_ptr as *const parabel::model::TrainHyperParam;
-    let dataset_ptr = dataset_ptr as *const parabel::DataSet;
-    let model = (*trainer_ptr).train((*dataset_ptr).clone());
-    Box::into_raw(Box::new(model)) as *mut ParabelModel
+    assert!(!dataset_ptr.is_null(), "Dataset should not be null");
+    match parabel::model::liblinear::HyperParam::builder()
+        .loss_type(match linear_loss_type {
+            LossType::Hinge => parabel::model::liblinear::LossType::Hinge,
+            LossType::Log => parabel::model::liblinear::LossType::Log,
+        })
+        .eps(linear_eps)
+        .C(linear_c)
+        .weight_threshold(linear_weight_threshold)
+        .max_iter(linear_max_iter)
+        .build()
+        .and_then(|liblinear_hyperparam| {
+            parabel::model::TrainHyperParam::builder()
+                .linear(liblinear_hyperparam)
+                .n_trees(n_trees)
+                .max_leaf_size(max_leaf_size)
+                .cluster_eps(cluster_eps)
+                .centroid_threshold(centroid_threshold)
+                .build()
+        }) {
+        Ok(hyperparam) => {
+            let dataset_ptr = dataset_ptr as *const parabel::DataSet;
+            let model = hyperparam.train((*dataset_ptr).clone());
+            Box::into_raw(Box::new(model)) as *mut ParabelModel
+        }
+        Err(msg) => {
+            eprintln!("Failed to set hyper-parameters: {}", msg);
+            std::ptr::null_mut()
+        }
+    }
 }
 
 /// Initialize a simple logger that writes to stdout.

@@ -95,22 +95,21 @@ class Trainer:
             raise RuntimeError(f"Failed to load data from {data_path}")
 
         dataset_ptr = ffi.gc(dataset_ptr, lib.free_parabel_data_set)
-        trainer_ptr = ffi.gc(
-            lib.create_parabel_trainer(
-                self.n_trees,
-                self.max_leaf_size,
-                self.cluster_eps,
-                self.centroid_threshold,
-                lib.Hinge if self.linear_loss_type == LossType.HINGE else lib.Log,
-                self.linear_eps,
-                self.linear_c,
-                self.linear_weight_threshold,
-                self.linear_max_iter,
-            ),
-            lib.free_parabel_trainer,
+        model_ptr = lib.train_parabel_model(
+            self.n_trees,
+            self.max_leaf_size,
+            self.cluster_eps,
+            self.centroid_threshold,
+            lib.Hinge if self.linear_loss_type == LossType.HINGE else lib.Log,
+            self.linear_eps,
+            self.linear_c,
+            self.linear_weight_threshold,
+            self.linear_max_iter,
+            dataset_ptr,
         )
+        if model_ptr == ffi.NULL:
+            raise RuntimeError(f"Failed to train model")
 
-        model_ptr = lib.train_parabel_model(trainer_ptr, dataset_ptr)
         return Model(model_ptr)
 
 
