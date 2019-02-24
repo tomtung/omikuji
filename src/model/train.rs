@@ -2,7 +2,7 @@ use super::{cluster, liblinear, Model, Tree, TreeNode};
 use crate::data::DataSet;
 use crate::mat_util::*;
 use crate::util::{create_progress_bar, ProgressBar};
-use crate::{Index, IndexSet, IndexValueVec, Mat, SparseMat};
+use crate::{Index, IndexSet, IndexValueVec};
 use derive_builder::Builder;
 use hashbrown::HashMap;
 use itertools::{izip, Itertools};

@@ -1,10 +1,16 @@
-use crate::{DenseVec, SparseVec};
+use crate::Index;
 use bit_set::BitSet;
 use ndarray::ArrayViewMut1;
 use num_traits::{Float, Num, Unsigned};
 use serde::{Deserialize, Serialize};
-use sprs::{CsMatBase, CsMatI, CsVecViewI, SpIndex, SparseMat};
+use sprs::{CsMatBase, CsMatI, CsVecViewI, SpIndex};
 use std::ops::{AddAssign, Deref, DerefMut, DivAssign};
+
+pub type SparseVec = sprs::CsVecI<f32, Index>;
+pub type SparseMat = sprs::CsMatI<f32, Index>;
+pub type SparseMatView<'a> = sprs::CsMatViewI<'a, f32, Index>;
+pub type DenseVec = ndarray::Array1<f32>;
+pub type DenseMat = ndarray::Array2<f32>;
 
 /// A vector, with both its sparse & dense forms available.
 pub struct SparseDenseVec {
@@ -26,19 +32,19 @@ impl SparseDenseVec {
 /// A matrix, can be either dense or sparse.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum Mat {
-    Sparse(super::SparseMat),
-    Dense(super::DenseMat),
+    Sparse(SparseMat),
+    Dense(DenseMat),
 }
 
 impl Mat {
-    pub fn dot_vec(&self, vec: &SparseDenseVec) -> super::DenseVec {
+    pub fn dot_vec(&self, vec: &SparseDenseVec) -> DenseVec {
         match self {
             // If the matrix is dense, use the sparse vector; otherwise, use the dense vector
             Mat::Dense(mat) => {
                 DenseVec::from_iter(mat.outer_iter().map(|w| vec.sparse.dot_dense(w)))
             }
             Mat::Sparse(mat) => {
-                let mut prod = super::DenseVec::zeros(mat.rows());
+                let mut prod = DenseVec::zeros(mat.rows());
                 sprs::prod::mul_acc_mat_vec_csr(
                     mat.view(),
                     vec.dense.as_slice()
@@ -49,13 +55,6 @@ impl Mat {
                 );
                 prod
             }
-        }
-    }
-
-    pub fn shape(&self) -> (usize, usize) {
-        match self {
-            Mat::Sparse(mat) => mat.shape(),
-            Mat::Dense(mat) => mat.dim(),
         }
     }
 }
@@ -178,7 +177,7 @@ where
 {
 }
 
-pub trait CsMatBaseTools<DataT, IndexT: SpIndex>: SparseMat {
+pub trait CsMatBaseTools<DataT, IndexT: SpIndex>: sprs::SparseMat {
     fn copy_outer_dims(&self, indices: &[usize]) -> CsMatI<DataT, IndexT>;
 }
 
@@ -214,7 +213,7 @@ where
     }
 }
 
-pub trait CsMatITools<DataT: Copy, IndexT: SpIndex>: SparseMat + Sized {
+pub trait CsMatITools<DataT: Copy, IndexT: SpIndex>: sprs::SparseMat + Sized {
     fn shrink_column_indices(self) -> (Self, Vec<IndexT>);
     fn remap_column_indices(self, old_index_to_new: &[IndexT], n_columns: usize) -> Self;
 }

@@ -1,5 +1,5 @@
 use crate::mat_util::*;
-use crate::{DenseVec, Index, SparseMat, SparseMatView};
+use crate::Index;
 use derive_builder::Builder;
 use itertools::Itertools;
 use rand::prelude::*;

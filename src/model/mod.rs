@@ -3,8 +3,8 @@ pub mod eval;
 pub mod liblinear;
 pub mod train;
 
-use crate::mat_util::{Mat, SparseDenseVec};
-use crate::{Index, IndexValueVec, SparseVec};
+use crate::mat_util::*;
+use crate::{Index, IndexValueVec};
 use hashbrown::HashMap;
 use itertools::Itertools;
 use log::info;
