@@ -7,7 +7,6 @@ authors = ["Tom Dong <tom.tung.dyb@gmail.com>"]
 [dependencies]
 bincode = "1.0"
 bit-set = "0.5"
-blas-src = { version = "0.2.0", default-features = false, features = ["openblas"], optional = true }
 clap = { version = "2.32", features = ["yaml"], optional = true }
 derive_builder = "0.7"
 hashbrown = "0.1"
@@ -15,7 +14,6 @@ itertools = "0.7"
 log = "0.4"
 ndarray = { version = "0.12", features = ["serde-1"] }
 num-traits = "0.2"
-openblas-src = { version = "0.6.0", default-features = false, features = ["cblas"], optional = true }
 order-stat = "0.1"
 pbr = "1.0"
 rand = "0.6"
@@ -35,6 +33,3 @@ required-features = ["cli"]
 
 [features]
 cli = ["simple_logger", "clap"]
-# Use OpenBLAS to speed up prediction
-openblas = ["ndarray/blas", "blas-src", "openblas-src", "openblas-src/system"]
-openblas-static = ["ndarray/blas", "blas-src", "openblas-src", "openblas-src/static"]

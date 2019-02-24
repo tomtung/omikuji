@@ -20,8 +20,3 @@ cbindgen = "0.8"
 
 [profile.release]
 panic = "abort"
-
-[features]
-# Use OpenBLAS to speed up prediction
-openblas = ["parabel/openblas"]
-openblas-static = ["parabel/openblas-static"]
