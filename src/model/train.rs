@@ -14,6 +14,7 @@ use std::sync::{Arc, Mutex};
 
 /// Model training hyper-parameters.
 #[derive(Builder, Copy, Clone, Debug, Serialize, Deserialize)]
+#[builder(build_fn(validate = "Self::validate"))]
 pub struct HyperParam {
     #[builder(default = "3")]
     pub n_trees: usize,
@@ -63,6 +64,24 @@ impl HyperParam {
             n_features: dataset.n_features,
             hyper_parm: *self,
         }
+    }
+}
+
+impl HyperParamBuilder {
+    fn validate(&self) -> Result<(), String> {
+        if let Some(n_trees) = self.n_trees {
+            if n_trees == 0 {
+                return Err("The model must have at least 1 tree".to_owned());
+            }
+        }
+
+        if let Some(max_leaf_size) = self.max_leaf_size {
+            if max_leaf_size <= 1 {
+                return Err("Maximum leaf size should be strictly larger than 1".to_owned());
+            }
+        }
+
+        Ok(())
     }
 }
 
