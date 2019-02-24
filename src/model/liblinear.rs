@@ -1,5 +1,5 @@
 use crate::mat_util::*;
-use crate::{DenseVec, DenseVecView, Index, SparseMat, SparseMatView};
+use crate::{DenseVec, Index, SparseMat, SparseMatView};
 use derive_builder::Builder;
 use itertools::Itertools;
 use rand::prelude::*;
@@ -115,7 +115,7 @@ pub(crate) fn train_classifier_group<Indices: Deref<Target = [usize]> + Sync>(
 ///
 /// We use dense vector during prediction time because it's much faster.
 pub(crate) fn predict_with_classifier_group(
-    feature_vec: DenseVecView,
+    feature_vec: &SparseDenseVec,
     weight_matrix: &Mat,
     loss_type: LossType,
 ) -> DenseVec {

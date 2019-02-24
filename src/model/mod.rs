@@ -3,7 +3,8 @@ pub mod eval;
 pub mod liblinear;
 pub mod train;
 
-use crate::{DenseVec, DenseVecView, Index, IndexValueVec, Mat};
+use crate::mat_util::{Mat, SparseDenseVec};
+use crate::{Index, IndexValueVec, SparseVec};
 use hashbrown::HashMap;
 use itertools::Itertools;
 use log::info;
@@ -32,18 +33,12 @@ impl Model {
     /// no duplicate or out-of-range indices
     /// * `beam_size` - Beam size for beam search.
     pub fn predict(&self, feature_vec: &[(Index, f32)], beam_size: usize) -> IndexValueVec {
-        let feature_vec = self.prepare_dense_feature_vec(feature_vec);
+        let feature_vec = self.prepare_feature_vec(feature_vec);
         let mut label_to_total_score = HashMap::<Index, f32>::new();
         let tree_predictions: Vec<_> = self
             .trees
             .par_iter()
-            .map(|tree| {
-                tree.predict(
-                    feature_vec.view(),
-                    beam_size,
-                    self.hyper_parm.linear.loss_type,
-                )
-            })
+            .map(|tree| tree.predict(&feature_vec, beam_size, self.hyper_parm.linear.loss_type))
             .collect();
         for label_score_pairs in tree_predictions {
             for (label, score) in label_score_pairs {
@@ -64,19 +59,28 @@ impl Model {
         label_score_pairs
     }
 
-    /// Normalize and densify the sparse feature vector to make prediction more efficient.
-    fn prepare_dense_feature_vec(&self, sparse_vec: &[(Index, f32)]) -> DenseVec {
-        let mut dense_vec = DenseVec::zeros(self.n_features + 1);
+    /// Prepare the feature vector in both dense and sparse forms to make prediction more efficient.
+    fn prepare_feature_vec(&self, sparse_vec: &[(Index, f32)]) -> SparseDenseVec {
         let norm = sparse_vec
             .iter()
             .map(|(_, v)| v.powi(2))
             .sum::<f32>()
             .sqrt();
-        for &(index, value) in sparse_vec {
-            dense_vec[index as usize] = value / norm; // l2-normalized
-        }
-        dense_vec[self.n_features] = 1.; // bias
-        dense_vec
+
+        let sparse_vec = {
+            let (mut indices, mut data): (Vec<_>, Vec<_>) = sparse_vec
+                .iter()
+                .cloned()
+                .map(|(i, v)| (i, v / norm))
+                .unzip();
+
+            indices.push(self.n_features as Index);
+            data.push(1.);
+
+            SparseVec::new(self.n_features + 1, indices, data)
+        };
+
+        SparseDenseVec::from_sparse(sparse_vec)
     }
 
     /// Serialize model.
@@ -139,7 +143,7 @@ impl TreeNode {
 impl Tree {
     fn predict(
         &self,
-        feature_vec: DenseVecView,
+        feature_vec: &SparseDenseVec,
         beam_size: usize,
         liblinear_loss_type: liblinear::LossType,
     ) -> IndexValueVec {
@@ -201,7 +205,7 @@ impl Tree {
                     labels,
                 } => {
                     let mut label_scores = liblinear::predict_with_classifier_group(
-                        feature_vec.view(),
+                        feature_vec,
                         &weight_matrix,
                         liblinear_loss_type,
                     );

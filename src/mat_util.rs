@@ -1,3 +1,4 @@
+use crate::{DenseVec, SparseVec};
 use bit_set::BitSet;
 use ndarray::ArrayViewMut1;
 use num_traits::{Float, Num, Unsigned};
@@ -5,6 +6,24 @@ use serde::{Deserialize, Serialize};
 use sprs::{CsMatBase, CsMatI, CsVecViewI, SpIndex, SparseMat};
 use std::ops::{AddAssign, Deref, DerefMut, DivAssign};
 
+/// A vector, with both its sparse & dense forms available.
+pub struct SparseDenseVec {
+    sparse: SparseVec,
+    dense: DenseVec,
+}
+
+impl SparseDenseVec {
+    pub fn from_sparse(sparse: SparseVec) -> Self {
+        let mut dense = DenseVec::zeros(sparse.dim());
+        sparse.scatter(dense.as_slice_mut().expect(
+            "Dense vector should have been created to be contiguous and in standard order",
+        ));
+
+        Self { sparse, dense }
+    }
+}
+
+/// A matrix, can be either dense or sparse.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum Mat {
     Sparse(super::SparseMat),
@@ -12,21 +31,31 @@ pub enum Mat {
 }
 
 impl Mat {
-    pub fn dot_vec(&self, vec: super::DenseVecView) -> super::DenseVec {
+    pub fn dot_vec(&self, vec: &SparseDenseVec) -> super::DenseVec {
         match self {
-            Mat::Sparse(sparse_mat) => {
-                let mut scores = super::DenseVec::zeros(sparse_mat.rows());
-                sprs::prod::mul_acc_mat_vec_csr(
-                    sparse_mat.view(),
-                    vec.as_slice()
-                        .expect("Dense vector must be contiguous and in standard order"),
-                    scores
-                        .as_slice_mut()
-                        .expect("We should've created dense vector `scores` to be contiguous and in standard order"),
-                );
-                scores
+            // If the matrix is dense, use the sparse vector; otherwise, use the dense vector
+            Mat::Dense(mat) => {
+                DenseVec::from_iter(mat.outer_iter().map(|w| vec.sparse.dot_dense(w)))
             }
-            Mat::Dense(dense_mat) => dense_mat.dot(&vec),
+            Mat::Sparse(mat) => {
+                let mut prod = super::DenseVec::zeros(mat.rows());
+                sprs::prod::mul_acc_mat_vec_csr(
+                    mat.view(),
+                    vec.dense.as_slice()
+                        .expect("Dense vector must be contiguous and in standard order"),
+                    prod
+                        .as_slice_mut()
+                        .expect("We should've created dense vector `prod` to be contiguous and in standard order"),
+                );
+                prod
+            }
+        }
+    }
+
+    pub fn shape(&self) -> (usize, usize) {
+        match self {
+            Mat::Sparse(mat) => mat.shape(),
+            Mat::Dense(mat) => mat.dim(),
         }
     }
 }
