@@ -62,6 +62,11 @@ subcommands:
             long: linear.weight_threshold
             takes_value: true
             default_value: "0.1"
+        - linear.max_sparse_density:
+            help: Density threshold above which weight matrices are stored in dense format. Lower values results in larger model but faster prediction.
+            long: linear.max_sparse_density
+            takes_value: true
+            default_value: "0.15"
         - linear.max_iter:
             help: Max number of iterations for training each linear classifier (hyper-parameter)
             long: linear.max_iter

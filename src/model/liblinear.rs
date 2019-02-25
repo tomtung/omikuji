@@ -35,6 +35,9 @@ pub struct HyperParam {
 
     #[builder(default = "20")]
     pub max_iter: u32,
+
+    #[builder(default = "0.15")]
+    pub max_sparse_density: f32,
 }
 
 impl Default for HyperParam {
@@ -111,7 +114,7 @@ impl HyperParam {
         let density =
             weight_matrix.nnz() as f32 / (weight_matrix.rows() * weight_matrix.cols()) as f32;
         MultiLabelClassifier {
-            weights: if density < 0.25 {
+            weights: if density < self.max_sparse_density {
                 Mat::Sparse(weight_matrix)
             } else {
                 Mat::Dense(weight_matrix.to_dense())
