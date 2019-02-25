@@ -20,27 +20,27 @@ subcommands:
             takes_value: true
             default_value: "0"
         - n_trees:
-            help: Number of trees (hyper-parameter)
+            help: Number of trees
             long: n_trees
             takes_value: true
             default_value: "3"
         - max_leaf_size:
-            help: Max number of labels in a leaf node (hyper-parameter)
+            help: Max number of labels in a leaf node
             long: max_leaf_size
             takes_value: true
             default_value: "100"
         - cluster_eps:
-            help: Epsilon value for determining clustering convergence (hyper-parameter)
+            help: Epsilon value for determining clustering convergence
             long: cluster_eps
             takes_value: true
             default_value: "0.0001"
         - centroid_threshold:
-            help: Threshold for pruning label centroid vectors (hyper-parameter)
+            help: Threshold for pruning label centroid vectors
             long: centroid_threshold
             takes_value: true
             default_value: "0.0"
         - linear.loss:
-            help: Loss function used by linear classifiers (hyper-parameter)
+            help: Loss function used by linear classifiers
             long: linear.loss
             takes_value: true
             default_value: "hinge"
@@ -48,17 +48,17 @@ subcommands:
               - hinge
               - log
         - linear.eps:
-            help: Epsilon value for determining linear classifier convergence (hyper-parameter)
+            help: Epsilon value for determining linear classifier convergence
             long: linear.eps
             takes_value: true
             default_value: "0.1"
         - linear.c:
-            help: Cost co-efficient for regularizing linear classifiers (hyper-parameter)
+            help: Cost co-efficient for regularizing linear classifiers
             long: linear.c
             takes_value: true
             default_value: "1.0"
         - linear.weight_threshold:
-            help: Threshold for pruning weight vectors of linear classifiers (hyper-parameter)
+            help: Threshold for pruning weight vectors of linear classifiers
             long: linear.weight_threshold
             takes_value: true
             default_value: "0.1"
@@ -68,7 +68,7 @@ subcommands:
             takes_value: true
             default_value: "0.15"
         - linear.max_iter:
-            help: Max number of iterations for training each linear classifier (hyper-parameter)
+            help: Max number of iterations for training each linear classifier
             long: linear.max_iter
             takes_value: true
             default_value: "20"

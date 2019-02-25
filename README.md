@@ -82,34 +82,37 @@ FLAGS:
 
 OPTIONS:
         --centroid_threshold <centroid_threshold>
-            Threshold for pruning label centroid vectors (hyper-parameter) [default: 0.0]
+            Threshold for pruning label centroid vectors [default: 0.0]
 
         --cluster_eps <cluster_eps>
-            Epsilon value for determining clustering convergence (hyper-parameter) [default: 0.0001]
+            Epsilon value for determining clustering convergence [default: 0.0001]
 
         --linear.c <linear.c>
-            Cost co-efficient for regularizing linear classifiers (hyper-parameter) [default: 1.0]
+            Cost co-efficient for regularizing linear classifiers [default: 1.0]
 
         --linear.eps <linear.eps>
-            Epsilon value for determining linear classifier convergence (hyper-parameter) [default: 0.1]
+            Epsilon value for determining linear classifier convergence [default: 0.1]
 
         --linear.loss <linear.loss>
-            Loss function used by linear classifiers (hyper-parameter) [default: hinge]  [possible values: hinge, log]
+            Loss function used by linear classifiers [default: hinge]  [possible values: hinge, log]
 
         --linear.max_iter <linear.max_iter>
-            Max number of iterations for training each linear classifier (hyper-parameter) [default: 20]
+            Max number of iterations for training each linear classifier [default: 20]
 
+        --linear.max_sparse_density <linear.max_sparse_density>
+            Density threshold above which weight matrices are stored in dense format. Lower values results in larger
+            model but faster prediction. [default: 0.15]
         --linear.weight_threshold <linear.weight_threshold>
-            Threshold for pruning weight vectors of linear classifiers (hyper-parameter) [default: 0.1]
+            Threshold for pruning weight vectors of linear classifiers [default: 0.1]
 
-        --max_leaf_size <max_leaf_size>
-            Max number of labels in a leaf node (hyper-parameter) [default: 100]
+        --max_leaf_size <max_leaf_size>                            Max number of labels in a leaf node [default: 100]
+        --model_path <PATH>
+            Path to which the trained model will be saved if provided
 
-        --model_path <PATH>                                    Path to which the trained model will be saved if provided
         --n_threads <n_threads>
             Number of worker threads. If 0, the number is selected automatically [default: 0]
 
-        --n_trees <n_trees>                                    Number of trees (hyper-parameter) [default: 3]
+        --n_trees <n_trees>                                        Number of trees [default: 3]
 
 ARGS:
     <training_data>    Path to training dataset file (in the format of the Extreme Classification Repository)
