@@ -21,7 +21,6 @@ pub type TrainHyperParam = train::HyperParam;
 pub struct Model {
     trees: Vec<Tree>,
     n_features: usize,
-    hyper_parm: TrainHyperParam,
 }
 
 impl Model {
@@ -38,7 +37,7 @@ impl Model {
         let tree_predictions: Vec<_> = self
             .trees
             .par_iter()
-            .map(|tree| tree.predict(&feature_vec, beam_size, self.hyper_parm.linear.loss_type))
+            .map(|tree| tree.predict(&feature_vec, beam_size))
             .collect();
         for label_score_pairs in tree_predictions {
             for (label, score) in label_score_pairs {
@@ -121,11 +120,11 @@ struct Tree {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 enum TreeNode {
     BranchNode {
-        weight_matrix: Mat,
+        classifier: liblinear::MultiLabelClassifier,
         children: Vec<TreeNode>,
     },
     LeafNode {
-        weight_matrix: Mat,
+        classifier: liblinear::MultiLabelClassifier,
         labels: Vec<Index>,
     },
 }
@@ -141,12 +140,7 @@ impl TreeNode {
 }
 
 impl Tree {
-    fn predict(
-        &self,
-        feature_vec: &SparseDenseVec,
-        beam_size: usize,
-        liblinear_loss_type: liblinear::LossType,
-    ) -> IndexValueVec {
+    fn predict(&self, feature_vec: &SparseDenseVec, beam_size: usize) -> IndexValueVec {
         assert!(beam_size > 0);
         let mut curr_level = Vec::<(&TreeNode, f32)>::with_capacity(beam_size * 2);
         let mut next_level = Vec::<(&TreeNode, f32)>::with_capacity(beam_size * 2);
@@ -178,14 +172,10 @@ impl Tree {
             for &(node, node_score) in &curr_level {
                 match node {
                     TreeNode::BranchNode {
-                        weight_matrix,
+                        classifier,
                         children,
                     } => {
-                        let mut child_scores = liblinear::predict_with_classifier_group(
-                            feature_vec,
-                            &weight_matrix,
-                            liblinear_loss_type,
-                        );
+                        let mut child_scores = classifier.predict(feature_vec);
                         child_scores += node_score;
                         next_level
                             .extend(children.iter().zip_eq(child_scores.into_iter().cloned()));
@@ -200,15 +190,8 @@ impl Tree {
         curr_level
             .iter()
             .flat_map(|&(leaf, leaf_score)| match leaf {
-                TreeNode::LeafNode {
-                    weight_matrix,
-                    labels,
-                } => {
-                    let mut label_scores = liblinear::predict_with_classifier_group(
-                        feature_vec,
-                        &weight_matrix,
-                        liblinear_loss_type,
-                    );
+                TreeNode::LeafNode { classifier, labels } => {
+                    let mut label_scores = classifier.predict(feature_vec);
                     label_scores.mapv_inplace(|v| (v + leaf_score).exp());
                     labels
                         .iter()

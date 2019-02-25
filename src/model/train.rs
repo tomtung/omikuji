@@ -62,7 +62,6 @@ impl HyperParam {
         Model {
             trees,
             n_features: dataset.n_features,
-            hyper_parm: *self,
         }
     }
 }
@@ -193,23 +192,28 @@ impl<'a> TreeTrainer<'a> {
                 .map(|cluster| examples.find_examples_with_labels(&cluster.labels))
                 .collect::<Vec<_>>();
 
-            let (weight_matrix, children) = rayon::join(
+            let (children, classifier) = rayon::join(
                 {
                     let examples = examples.clone();
-                    || self.train_classifier_group(examples, &example_index_lists)
+                    || {
+                        self.train_child_nodes(
+                            height,
+                            examples,
+                            label_clusters,
+                            &example_index_lists,
+                        )
+                    }
                 },
                 || {
-                    self.train_child_nodes(
-                        height,
+                    self.train_classifier(
                         examples, // NB: the Arc "examples" is moved into this closure
-                        label_clusters,
                         &example_index_lists,
                     )
                 },
             );
 
             TreeNode::BranchNode {
-                weight_matrix,
+                classifier,
                 children,
             }
         }
@@ -241,43 +245,37 @@ impl<'a> TreeTrainer<'a> {
     }
 
     fn train_leaf_node(&self, examples: Arc<TrainingExamples>, leaf_labels: &[Index]) -> TreeNode {
-        let example_index_lists = leaf_labels
-            .par_iter()
-            .map(|&label| examples.find_examples_with_label(label))
-            .collect::<Vec<_>>();
-        let weight_matrix = self.train_classifier_group(examples, &example_index_lists);
+        let classifier = {
+            let example_index_lists = leaf_labels
+                .par_iter()
+                .map(|&label| examples.find_examples_with_label(label))
+                .collect::<Vec<_>>();
+            self.train_classifier(examples, &example_index_lists)
+        };
         TreeNode::LeafNode {
-            weight_matrix,
+            classifier,
             labels: leaf_labels.to_vec(),
         }
     }
 
-    fn train_classifier_group(
+    fn train_classifier(
         &self,
         examples: Arc<TrainingExamples>,
-        index_lists: &[Vec<usize>],
-    ) -> Mat {
-        let weight_matrix = liblinear::train_classifier_group(
+        label_to_example_indices: &[Vec<usize>],
+    ) -> liblinear::MultiLabelClassifier {
+        let classifier = self.classifier_hyper_param(examples.len()).train(
             &examples.feature_matrix.view(),
-            index_lists,
-            &self.classifier_hyper_param(examples.len()),
-        )
-        .remap_column_indices(&examples.index_to_feature, self.all_examples.n_features());
+            label_to_example_indices,
+            &examples.index_to_feature,
+            self.all_examples.n_features(),
+        );
 
-        assert_eq!(weight_matrix.rows(), index_lists.len());
         self.progress_bar
             .lock()
             .expect("Failed to lock progress bar")
-            .add(index_lists.len() as u64);
+            .add(label_to_example_indices.len() as u64);
 
-        // Store as dense matrix if not sparse enough, which greatly speeds up prediction
-        let density =
-            weight_matrix.nnz() as f32 / (weight_matrix.rows() * weight_matrix.cols()) as f32;
-        if density < 0.25 {
-            Mat::Sparse(weight_matrix)
-        } else {
-            Mat::Dense(weight_matrix.to_dense())
-        }
+        classifier
     }
 }
 

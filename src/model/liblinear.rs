@@ -51,11 +51,8 @@ impl HyperParam {
         HyperParamBuilder::default()
     }
 
-    pub(crate) fn adapt_to_sample_size(
-        &self,
-        n_curr_examples: usize,
-        n_total_examples: usize,
-    ) -> Self {
+    /// Adapt regularization based on sample size relative to overall training data size.
+    pub fn adapt_to_sample_size(&self, n_curr_examples: usize, n_total_examples: usize) -> Self {
         match self.loss_type {
             LossType::Hinge => *self,
             LossType::Log => Self {
@@ -64,67 +61,83 @@ impl HyperParam {
             },
         }
     }
-}
 
-/// Train a group of linear classifiers, and return their weights in a single matrix.
-pub(crate) fn train_classifier_group<Indices: Deref<Target = [usize]> + Sync>(
-    feature_matrix: &SparseMatView,
-    index_lists: &[Indices],
-    hyper_param: &HyperParam,
-) -> SparseMat {
-    assert!(feature_matrix.is_csr());
-    let solver = match hyper_param.loss_type {
-        LossType::Hinge => solve_l2r_l2_svc,
-        LossType::Log => solve_l2r_lr_dual,
-    };
-    let weight_vecs = index_lists
-        .par_iter()
-        .map(|indices| {
-            // For the current classifier, an example is positive iff its index is in the given list
-            let mut labels = vec![false; feature_matrix.rows()];
-            for &i in indices.iter() {
-                labels[i] = true;
-            }
-
-            // Train the classifier
-            solver(
-                feature_matrix,
-                &labels,
-                hyper_param.eps,
-                hyper_param.C,
-                hyper_param.C,
-                hyper_param.max_iter,
-            )
-            .indexed_iter()
-            .filter_map(|(index, &value)| {
-                // Prune weights using the given threshold
-                if value.abs() <= hyper_param.weight_threshold {
-                    None
-                } else {
-                    Some((index as Index, value))
+    /// Train a one-vs-all multi-label classifier with the given data.
+    pub fn train<Indices: Deref<Target = [usize]> + Sync>(
+        &self,
+        feature_matrix: &SparseMatView,
+        label_to_example_indices: &[Indices],
+        index_to_feature: &[Index],
+        n_features: usize,
+    ) -> MultiLabelClassifier {
+        assert!(feature_matrix.is_csr());
+        let solver = match self.loss_type {
+            LossType::Hinge => solve_l2r_l2_svc,
+            LossType::Log => solve_l2r_lr_dual,
+        };
+        let weight_matrix = label_to_example_indices
+            .par_iter()
+            .map(|indices| {
+                // For the current classifier, an example is positive iff its index is in the given list
+                let mut labels = vec![false; feature_matrix.rows()];
+                for &i in indices.iter() {
+                    labels[i] = true;
                 }
-            })
-            .collect_vec()
-        })
-        .collect::<Vec<_>>();
 
-    weight_vecs.copy_to_csrmat(feature_matrix.cols())
+                // Train the classifier
+                solver(
+                    feature_matrix,
+                    &labels,
+                    self.eps,
+                    self.C,
+                    self.C,
+                    self.max_iter,
+                )
+                .indexed_iter()
+                .filter_map(|(index, &value)| {
+                    // Prune weights using the given threshold
+                    if value.abs() <= self.weight_threshold {
+                        None
+                    } else {
+                        Some((index_to_feature[index], value))
+                    }
+                })
+                .collect_vec()
+            })
+            .collect::<Vec<_>>()
+            .copy_to_csrmat(n_features);
+
+        // Store as dense matrix if not sparse enough, which greatly speeds up prediction
+        let density =
+            weight_matrix.nnz() as f32 / (weight_matrix.rows() * weight_matrix.cols()) as f32;
+        MultiLabelClassifier {
+            weights: if density < 0.25 {
+                Mat::Sparse(weight_matrix)
+            } else {
+                Mat::Dense(weight_matrix.to_dense())
+            },
+            loss_type: self.loss_type,
+        }
+    }
 }
 
-/// Score an example with all classifiers in the group.
-///
-/// We use dense vector during prediction time because it's much faster.
-pub(crate) fn predict_with_classifier_group(
-    feature_vec: &SparseDenseVec,
-    weight_matrix: &Mat,
+/// A one-vs-all multi-label classifier
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct MultiLabelClassifier {
+    weights: Mat,
     loss_type: LossType,
-) -> DenseVec {
-    let mut scores = weight_matrix.dot_vec(feature_vec);
-    match loss_type {
-        LossType::Log => scores.mapv_inplace(|v| -(-v).exp().ln_1p()),
-        LossType::Hinge => scores.mapv_inplace(|v| -(1. - v).max(0.).powi(2)),
+}
+
+impl MultiLabelClassifier {
+    /// Predict scores for each label.
+    pub fn predict(&self, feature_vec: &SparseDenseVec) -> DenseVec {
+        let mut scores = self.weights.dot_vec(feature_vec);
+        match self.loss_type {
+            LossType::Log => scores.mapv_inplace(|v| -(-v).exp().ln_1p()),
+            LossType::Hinge => scores.mapv_inplace(|v| -(1. - v).max(0.).powi(2)),
+        }
+        scores
     }
-    scores
 }
 
 /// A coordinate descent solver for L2-loss SVM dual problems.
