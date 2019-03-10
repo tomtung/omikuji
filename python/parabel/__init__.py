@@ -31,6 +31,11 @@ class Model(object):
 
         return cls(model_ptr)
 
+    @property
+    def n_features(self):
+        """Get the expected dimension of feature vectors."""
+        return lib.parabel_n_features(self._model_ptr)
+
     def save(self, path):
         """Save parabel model to file of the given path."""
         assert self._model_ptr != ffi.NULL
@@ -43,6 +48,13 @@ class Model(object):
     def predict(self, feature_value_pairs, beam_size=10, top_k=10):
         """Make predictions with parabel model."""
         assert self._model_ptr != ffi.NULL
+
+        feature_value_pairs = sorted(feature_value_pairs, key=lambda kv: kv[0])
+        n_features = self.n_features
+        if feature_value_pairs:
+            for (f1, _), (f2, _) in zip(feature_value_pairs, feature_value_pairs[1:]):
+                assert 0 <= f1 < f2 < n_features, "Incorrect feature index"
+
         input_len = len(feature_value_pairs)
         feature_indices = ffi.new("uint32_t[]", input_len)
         feature_values = ffi.new("float[]", input_len)

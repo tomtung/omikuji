@@ -68,10 +68,19 @@ pub unsafe extern "C" fn free_parabel_model(model_ptr: *mut ParabelModel) {
     }
 }
 
+
+/// Get the expected dimension of feature vectors.
+#[no_mangle]
+pub unsafe extern "C" fn parabel_n_features(model_ptr: *const ParabelModel) -> size_t {
+    assert!(!model_ptr.is_null(), "Model should not be null");
+    let model_ptr = model_ptr as *const parabel::Model;
+    return (*model_ptr).n_features();
+}
+
 /// Make predictions with parabel model.
 #[no_mangle]
 pub unsafe extern "C" fn parabel_predict(
-    model_ptr: *mut ParabelModel,
+    model_ptr: *const ParabelModel,
     beam_size: size_t,
     input_len: size_t,
     feature_indices: *const uint32_t,
@@ -81,7 +90,7 @@ pub unsafe extern "C" fn parabel_predict(
     output_scores: *mut c_float,
 ) -> size_t {
     assert!(!model_ptr.is_null(), "Model should not be null");
-    let model_ptr = model_ptr as *mut parabel::Model;
+    let model_ptr = model_ptr as *const parabel::Model;
     let feature_vec = {
         let feature_indices = slice::from_raw_parts(feature_indices, input_len);
         let feature_values = slice::from_raw_parts(feature_values, input_len);

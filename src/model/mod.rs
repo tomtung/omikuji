@@ -58,6 +58,11 @@ impl Model {
         label_score_pairs
     }
 
+    /// The expected dimension of feature vectors.
+    pub fn n_features(&self) -> usize {
+        self.n_features
+    }
+
     /// Prepare the feature vector in both dense and sparse forms to make prediction more efficient.
     fn prepare_feature_vec(&self, sparse_vec: &[(Index, f32)]) -> SparseVec {
         let norm = sparse_vec
