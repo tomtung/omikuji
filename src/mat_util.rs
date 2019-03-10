@@ -12,23 +12,6 @@ pub type SparseMatView<'a> = sprs::CsMatViewI<'a, f32, Index>;
 pub type DenseVec = ndarray::Array1<f32>;
 pub type DenseMat = ndarray::Array2<f32>;
 
-/// A vector, with both its sparse & dense forms available.
-pub struct SparseDenseVec {
-    sparse: SparseVec,
-    dense: DenseVec,
-}
-
-impl SparseDenseVec {
-    pub fn from_sparse(sparse: SparseVec) -> Self {
-        let mut dense = DenseVec::zeros(sparse.dim());
-        sparse.scatter(dense.as_slice_mut().expect(
-            "Dense vector should have been created to be contiguous and in standard order",
-        ));
-
-        Self { sparse, dense }
-    }
-}
-
 /// A matrix, can be either dense or sparse.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum Mat {
@@ -37,26 +20,52 @@ pub enum Mat {
 }
 
 impl Mat {
-    pub fn dot_vec(&self, vec: &SparseDenseVec) -> DenseVec {
+    pub fn dot_vec(&self, vec: &SparseVec) -> DenseVec {
         match self {
-            // If the matrix is dense, use the sparse vector; otherwise, use the dense vector
-            Mat::Dense(mat) => {
-                DenseVec::from_iter(mat.outer_iter().map(|w| vec.sparse.dot_dense(w)))
-            }
-            Mat::Sparse(mat) => {
-                let mut prod = DenseVec::zeros(mat.rows());
-                sprs::prod::mul_acc_mat_vec_csr(
-                    mat.view(),
-                    vec.dense.as_slice()
-                        .expect("Dense vector must be contiguous and in standard order"),
-                    prod
-                        .as_slice_mut()
-                        .expect("We should've created dense vector `prod` to be contiguous and in standard order"),
-                );
-                prod
-            }
+            Mat::Dense(mat) => DenseVec::from_iter(mat.outer_iter().map(|w| vec.dot_dense(w))),
+            Mat::Sparse(mat) => DenseVec::from_iter(
+                mat.outer_iterator()
+                    .map(|row| csvec_dot_by_binary_search(vec.view(), row)),
+            ),
         }
     }
+}
+
+/// Compute the dot product of two sparse vectors, using binary search to find matching indices.
+///
+/// Runs in O(MlogN) time, where M and N are the number of non-zero entries in each vector.
+pub fn csvec_dot_by_binary_search<'a, N, I>(
+    vec1: sprs::CsVecViewI<N, I>,
+    vec2: sprs::CsVecViewI<N, I>,
+) -> N
+where
+    I: SpIndex,
+    N: Num + Copy + AddAssign,
+{
+    let (mut idx1, mut val1, mut idx2, mut val2) = if vec1.nnz() < vec2.nnz() {
+        (vec1.indices(), vec1.data(), vec2.indices(), vec2.data())
+    } else {
+        (vec2.indices(), vec2.data(), vec1.indices(), vec1.data())
+    };
+
+    let mut sum = N::zero();
+    while !idx1.is_empty() && !idx2.is_empty() {
+        debug_assert_eq!(idx1.len(), val1.len());
+        debug_assert_eq!(idx2.len(), val2.len());
+
+        let (found, i) = match idx2.binary_search(&idx1[0]) {
+            Ok(i) => (true, i),
+            Err(i) => (false, i),
+        };
+        if found {
+            sum += val1[0] * val2[i];
+        }
+        idx1 = &idx1[1..];
+        val1 = &val1[1..];
+        idx2 = &idx2[i..];
+        val2 = &val2[i..];
+    }
+    sum
 }
 
 pub trait IndexValuePairs<IndexT: SpIndex + Unsigned, ValueT: Copy>:
@@ -325,6 +334,19 @@ mod tests {
     use super::*;
     use ndarray::array;
     use sprs::CsVecI;
+
+    #[test]
+    fn test_csvec_dot_by_binary_search() {
+        let vec1 = CsVecI::new(8, vec![0, 2, 4, 6], vec![1.; 4]);
+        let vec2 = CsVecI::new(8, vec![1, 3, 5, 7], vec![2.; 4]);
+        let vec3 = CsVecI::new(8, vec![1, 2, 5, 6], vec![3.; 4]);
+
+        assert_eq!(0., csvec_dot_by_binary_search(vec1.view(), vec2.view()));
+        assert_eq!(4., csvec_dot_by_binary_search(vec1.view(), vec1.view()));
+        assert_eq!(16., csvec_dot_by_binary_search(vec2.view(), vec2.view()));
+        assert_eq!(6., csvec_dot_by_binary_search(vec1.view(), vec3.view()));
+        assert_eq!(12., csvec_dot_by_binary_search(vec2.view(), vec3.view()));
+    }
 
     #[test]
     fn test_is_valid_sparse_vec() {

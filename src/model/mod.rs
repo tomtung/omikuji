@@ -59,27 +59,23 @@ impl Model {
     }
 
     /// Prepare the feature vector in both dense and sparse forms to make prediction more efficient.
-    fn prepare_feature_vec(&self, sparse_vec: &[(Index, f32)]) -> SparseDenseVec {
+    fn prepare_feature_vec(&self, sparse_vec: &[(Index, f32)]) -> SparseVec {
         let norm = sparse_vec
             .iter()
             .map(|(_, v)| v.powi(2))
             .sum::<f32>()
             .sqrt();
 
-        let sparse_vec = {
-            let (mut indices, mut data): (Vec<_>, Vec<_>) = sparse_vec
-                .iter()
-                .cloned()
-                .map(|(i, v)| (i, v / norm))
-                .unzip();
+        let (mut indices, mut data): (Vec<_>, Vec<_>) = sparse_vec
+            .iter()
+            .cloned()
+            .map(|(i, v)| (i, v / norm))
+            .unzip();
 
-            indices.push(self.n_features as Index);
-            data.push(1.);
+        indices.push(self.n_features as Index);
+        data.push(1.);
 
-            SparseVec::new(self.n_features + 1, indices, data)
-        };
-
-        SparseDenseVec::from_sparse(sparse_vec)
+        SparseVec::new(self.n_features + 1, indices, data)
     }
 
     /// Serialize model.
@@ -140,7 +136,7 @@ impl TreeNode {
 }
 
 impl Tree {
-    fn predict(&self, feature_vec: &SparseDenseVec, beam_size: usize) -> IndexValueVec {
+    fn predict(&self, feature_vec: &SparseVec, beam_size: usize) -> IndexValueVec {
         assert!(beam_size > 0);
         let mut curr_level = Vec::<(&TreeNode, f32)>::with_capacity(beam_size * 2);
         let mut next_level = Vec::<(&TreeNode, f32)>::with_capacity(beam_size * 2);

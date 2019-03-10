@@ -133,7 +133,7 @@ pub struct MultiLabelClassifier {
 
 impl MultiLabelClassifier {
     /// Predict scores for each label.
-    pub fn predict(&self, feature_vec: &SparseDenseVec) -> DenseVec {
+    pub fn predict(&self, feature_vec: &SparseVec) -> DenseVec {
         let mut scores = self.weights.dot_vec(feature_vec);
         match self.loss_type {
             LossType::Log => scores.mapv_inplace(|v| -(-v).exp().ln_1p()),
