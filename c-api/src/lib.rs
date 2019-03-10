@@ -159,7 +159,7 @@ pub unsafe extern "C" fn train_parabel_model(
             LossType::Log => parabel::model::liblinear::LossType::Log,
         })
         .eps(linear_eps)
-        .C(linear_c)
+        .c(linear_c)
         .weight_threshold(linear_weight_threshold)
         .max_iter(linear_max_iter)
         .build()

@@ -19,7 +19,6 @@ pub enum LossType {
 
 /// Hyper-parameter settings for training liblinear model.
 #[derive(Builder, Copy, Clone, Debug, Serialize, Deserialize)]
-#[allow(non_snake_case)]
 pub struct HyperParam {
     #[builder(default = "LossType::Hinge")]
     pub loss_type: LossType,
@@ -28,7 +27,7 @@ pub struct HyperParam {
     pub eps: f32,
 
     #[builder(default = "1.")]
-    pub C: f32,
+    pub c: f32,
 
     #[builder(default = "0.1")]
     pub weight_threshold: f32,
@@ -59,7 +58,7 @@ impl HyperParam {
         match self.loss_type {
             LossType::Hinge => *self,
             LossType::Log => Self {
-                C: n_total_examples as f32 / n_curr_examples as f32,
+                c: n_total_examples as f32 / n_curr_examples as f32,
                 ..*self
             },
         }
@@ -92,8 +91,8 @@ impl HyperParam {
                     feature_matrix,
                     &labels,
                     self.eps,
-                    self.C,
-                    self.C,
+                    self.c,
+                    self.c,
                     self.max_iter,
                 )
                 .indexed_iter()

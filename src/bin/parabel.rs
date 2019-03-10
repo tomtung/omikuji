@@ -22,7 +22,7 @@ fn parse_train_hyper_param(matches: &clap::ArgMatches) -> parabel::model::TrainH
                 _ => unreachable!(),
             })
             .eps(value_t!(matches, "linear.eps", f32).unwrap())
-            .C(value_t!(matches, "linear.c", f32).unwrap())
+            .c(value_t!(matches, "linear.c", f32).unwrap())
             .weight_threshold(value_t!(matches, "linear.weight_threshold", f32).unwrap())
             .max_sparse_density(value_t!(matches, "linear.max_sparse_density", f32).unwrap())
             .max_iter(value_t!(matches, "linear.max_iter", u32).unwrap())
