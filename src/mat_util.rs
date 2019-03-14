@@ -23,10 +23,16 @@ impl Mat {
     pub fn dot_vec(&self, vec: &SparseVec) -> DenseVec {
         match self {
             Mat::Dense(mat) => DenseVec::from_iter(mat.outer_iter().map(|w| vec.dot_dense(w))),
-            Mat::Sparse(mat) => DenseVec::from_iter(
-                mat.outer_iterator()
-                    .map(|row| csvec_dot_by_binary_search(vec.view(), row)),
-            ),
+            Mat::Sparse(mat) => DenseVec::from_iter(mat.outer_iterator().map(|row| {
+                let m = vec.nnz().min(row.nnz());
+                let n = vec.nnz().max(row.nnz());
+                // Rough but practical heuristic: binary search only if one is much denser than the other
+                if n / m >= 10 {
+                    csvec_dot_by_binary_search(vec.view(), row)
+                } else {
+                    csvec_dot(vec.view(), row)
+                }
+            })),
         }
     }
 }
@@ -65,6 +71,40 @@ where
         idx2 = &idx2[i..];
         val2 = &val2[i..];
     }
+    sum
+}
+
+/// Sparse vector dot product.
+///
+/// This implementation runs in O(M+N) time, where M and N are the number of non-zero entries
+/// in each vector.
+///
+/// We temporarily implement this ourselves, because the current implementation provided by sprs
+/// is somehow much slower. See: https://github.com/vbarrielle/sprs/issues/151
+pub fn csvec_dot<N, I>(vec1: sprs::CsVecViewI<N, I>, vec2: sprs::CsVecViewI<N, I>) -> N
+where
+    I: SpIndex,
+    N: Num + Copy + AddAssign,
+{
+    let mut i = 0;
+    let mut j = 0;
+    let mut sum = N::zero();
+    while i < vec1.nnz() && j < vec2.nnz() {
+        let idx1 = vec1.indices()[i];
+        let idx2 = vec2.indices()[j];
+        if idx1 == idx2 {
+            sum += vec1.data()[i] * vec2.data()[j];
+        }
+
+        if idx1 <= idx2 {
+            i += 1;
+        }
+
+        if idx1 >= idx2 {
+            j += 1;
+        }
+    }
+
     sum
 }
 
