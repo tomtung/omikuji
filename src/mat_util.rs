@@ -40,7 +40,7 @@ impl Mat {
 /// Compute the dot product of two sparse vectors, using binary search to find matching indices.
 ///
 /// Runs in O(MlogN) time, where M and N are the number of non-zero entries in each vector.
-pub fn csvec_dot_by_binary_search<'a, N, I>(
+pub fn csvec_dot_by_binary_search<N, I>(
     vec1: sprs::CsVecViewI<N, I>,
     vec2: sprs::CsVecViewI<N, I>,
 ) -> N
