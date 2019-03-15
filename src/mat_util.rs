@@ -28,84 +28,13 @@ impl Mat {
                 let n = vec.nnz().max(row.nnz());
                 // Rough but practical heuristic: binary search only if one is much denser than the other
                 if n / m >= 10 {
-                    csvec_dot_by_binary_search(vec.view(), row)
+                    sprs::prod::csvec_dot_by_binary_search(vec.view(), row)
                 } else {
-                    csvec_dot(vec.view(), row)
+                    vec.dot(&row)
                 }
             })),
         }
     }
-}
-
-/// Compute the dot product of two sparse vectors, using binary search to find matching indices.
-///
-/// Runs in O(MlogN) time, where M and N are the number of non-zero entries in each vector.
-pub fn csvec_dot_by_binary_search<N, I>(
-    vec1: sprs::CsVecViewI<N, I>,
-    vec2: sprs::CsVecViewI<N, I>,
-) -> N
-where
-    I: SpIndex,
-    N: Num + Copy + AddAssign,
-{
-    let (mut idx1, mut val1, mut idx2, mut val2) = if vec1.nnz() < vec2.nnz() {
-        (vec1.indices(), vec1.data(), vec2.indices(), vec2.data())
-    } else {
-        (vec2.indices(), vec2.data(), vec1.indices(), vec1.data())
-    };
-
-    let mut sum = N::zero();
-    while !idx1.is_empty() && !idx2.is_empty() {
-        debug_assert_eq!(idx1.len(), val1.len());
-        debug_assert_eq!(idx2.len(), val2.len());
-
-        let (found, i) = match idx2.binary_search(&idx1[0]) {
-            Ok(i) => (true, i),
-            Err(i) => (false, i),
-        };
-        if found {
-            sum += val1[0] * val2[i];
-        }
-        idx1 = &idx1[1..];
-        val1 = &val1[1..];
-        idx2 = &idx2[i..];
-        val2 = &val2[i..];
-    }
-    sum
-}
-
-/// Sparse vector dot product.
-///
-/// This implementation runs in O(M+N) time, where M and N are the number of non-zero entries
-/// in each vector.
-///
-/// We temporarily implement this ourselves, because the current implementation provided by sprs
-/// is somehow much slower. See: https://github.com/vbarrielle/sprs/issues/151
-pub fn csvec_dot<N, I>(vec1: sprs::CsVecViewI<N, I>, vec2: sprs::CsVecViewI<N, I>) -> N
-where
-    I: SpIndex,
-    N: Num + Copy + AddAssign,
-{
-    let mut i = 0;
-    let mut j = 0;
-    let mut sum = N::zero();
-    while i < vec1.nnz() && j < vec2.nnz() {
-        let idx1 = vec1.indices()[i];
-        let idx2 = vec2.indices()[j];
-        if idx1 == idx2 {
-            sum += vec1.data()[i] * vec2.data()[j];
-        }
-
-        if idx1 <= idx2 {
-            i += 1;
-        }
-
-        if idx1 >= idx2 {
-            j += 1;
-        }
-    }
-
-    sum
 }
 
 pub trait IndexValuePairs<IndexT: SpIndex + Unsigned, ValueT: Copy>:
@@ -374,19 +303,6 @@ mod tests {
     use super::*;
     use ndarray::array;
     use sprs::CsVecI;
-
-    #[test]
-    fn test_csvec_dot_by_binary_search() {
-        let vec1 = CsVecI::new(8, vec![0, 2, 4, 6], vec![1.; 4]);
-        let vec2 = CsVecI::new(8, vec![1, 3, 5, 7], vec![2.; 4]);
-        let vec3 = CsVecI::new(8, vec![1, 2, 5, 6], vec![3.; 4]);
-
-        assert_eq!(0., csvec_dot_by_binary_search(vec1.view(), vec2.view()));
-        assert_eq!(4., csvec_dot_by_binary_search(vec1.view(), vec1.view()));
-        assert_eq!(16., csvec_dot_by_binary_search(vec2.view(), vec2.view()));
-        assert_eq!(6., csvec_dot_by_binary_search(vec1.view(), vec3.view()));
-        assert_eq!(12., csvec_dot_by_binary_search(vec2.view(), vec3.view()));
-    }
 
     #[test]
     fn test_is_valid_sparse_vec() {
