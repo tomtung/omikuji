@@ -1,16 +1,20 @@
 use itertools::Itertools;
-use libc::{int8_t, size_t, uint32_t};
+use libc::{c_void, int8_t, size_t, uint32_t};
 use std::ffi::CStr;
 use std::fs::File;
 use std::io::{BufReader, BufWriter};
 use std::os::raw::{c_char, c_float};
 use std::slice;
 
-#[no_mangle]
-pub enum ParabelModel {}
+#[repr(C)]
+pub struct ParabelModel {
+    _private: [u8; 0],
+}
 
-#[no_mangle]
-pub enum ParabelDataSet {}
+#[repr(C)]
+pub struct ParabelDataSet {
+    _private: [u8; 0],
+}
 
 /// Load parabel model from file of the given path.
 #[no_mangle]
@@ -41,7 +45,7 @@ pub unsafe extern "C" fn save_parabel_model(
 ) -> int8_t {
     assert!(!model_ptr.is_null(), "Model should not be null");
     assert!(!path.is_null(), "Path should not be null");
-    let model_ptr = model_ptr as *mut parabel::Model;
+    let model_ptr = model_ptr as *mut c_void as *mut parabel::Model;
     if let Err(msg) = CStr::from_ptr(path)
         .to_str()
         .map_err(|_| "Failed to parse path")
@@ -63,18 +67,17 @@ pub unsafe extern "C" fn save_parabel_model(
 #[no_mangle]
 pub unsafe extern "C" fn free_parabel_model(model_ptr: *mut ParabelModel) {
     if !model_ptr.is_null() {
-        let model_ptr = model_ptr as *mut parabel::Model;
+        let model_ptr = model_ptr as *mut c_void as *mut parabel::Model;
         drop(Box::from_raw(model_ptr));
     }
 }
-
 
 /// Get the expected dimension of feature vectors.
 #[no_mangle]
 pub unsafe extern "C" fn parabel_n_features(model_ptr: *const ParabelModel) -> size_t {
     assert!(!model_ptr.is_null(), "Model should not be null");
-    let model_ptr = model_ptr as *const parabel::Model;
-    return (*model_ptr).n_features();
+    let model_ptr = model_ptr as *const c_void as *const parabel::Model;
+    (*model_ptr).n_features()
 }
 
 /// Make predictions with parabel model.
@@ -90,7 +93,7 @@ pub unsafe extern "C" fn parabel_predict(
     output_scores: *mut c_float,
 ) -> size_t {
     assert!(!model_ptr.is_null(), "Model should not be null");
-    let model_ptr = model_ptr as *const parabel::Model;
+    let model_ptr = model_ptr as *const c_void as *const parabel::Model;
     let feature_vec = {
         let feature_indices = slice::from_raw_parts(feature_indices, input_len);
         let feature_values = slice::from_raw_parts(feature_values, input_len);
@@ -111,7 +114,7 @@ pub unsafe extern "C" fn parabel_predict(
         output_scores[i] = score;
     }
 
-    return output_len;
+    output_len
 }
 
 /// Load a data file from the Extreme Classification Repository.
@@ -136,7 +139,7 @@ pub unsafe extern "C" fn load_parabel_data_set(path: *const c_char) -> *mut Para
 #[no_mangle]
 pub unsafe extern "C" fn free_parabel_data_set(dataset_ptr: *mut ParabelDataSet) {
     if !dataset_ptr.is_null() {
-        let dataset_ptr = dataset_ptr as *mut parabel::DataSet;
+        let dataset_ptr = dataset_ptr as *mut c_void as *mut parabel::DataSet;
         drop(Box::from_raw(dataset_ptr));
     }
 }
@@ -182,7 +185,7 @@ pub unsafe extern "C" fn train_parabel_model(
                 .build()
         }) {
         Ok(hyperparam) => {
-            let dataset_ptr = dataset_ptr as *const parabel::DataSet;
+            let dataset_ptr = dataset_ptr as *const c_void as *const parabel::DataSet;
             let model = hyperparam.train((*dataset_ptr).clone());
             Box::into_raw(Box::new(model)) as *mut ParabelModel
         }
