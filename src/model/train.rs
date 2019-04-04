@@ -151,7 +151,10 @@ impl<'a> TreeTrainer<'a> {
     #[inline]
     fn compute_tree_height(n_labels: usize, max_leaf_size: usize) -> usize {
         assert!(max_leaf_size > 1);
-        ((n_labels as f32) / (max_leaf_size as f32)).log2().ceil() as usize
+        ((n_labels as f32) / (max_leaf_size as f32))
+            .log2()
+            .ceil()
+            .max(0.) as usize
     }
 
     #[inline]
@@ -509,6 +512,8 @@ mod tests {
     fn test_compute_tree_height() {
         assert_eq!(TreeTrainer::compute_tree_height(2, 2), 0);
         assert_eq!(TreeTrainer::compute_tree_height(3, 2), 1);
+        assert_eq!(TreeTrainer::compute_tree_height(2, 3), 0);
+        assert_eq!(TreeTrainer::compute_tree_height(3, 3), 0);
         assert_eq!(TreeTrainer::compute_tree_height(4, 2), 1);
         assert_eq!(TreeTrainer::compute_tree_height(5, 2), 2);
         assert_eq!(TreeTrainer::compute_tree_height(6, 2), 2);
