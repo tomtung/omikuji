@@ -162,6 +162,7 @@ pub unsafe extern "C" fn train_parabel_model(
     linear_c: c_float,
     linear_weight_threshold: c_float,
     linear_max_iter: uint32_t,
+    linear_max_sparse_density: c_float,
     dataset_ptr: *const ParabelDataSet,
 ) -> *mut ParabelModel {
     assert!(!dataset_ptr.is_null(), "Dataset should not be null");
@@ -174,6 +175,7 @@ pub unsafe extern "C" fn train_parabel_model(
         .c(linear_c)
         .weight_threshold(linear_weight_threshold)
         .max_iter(linear_max_iter)
+        .max_sparse_density(linear_max_sparse_density)
         .build()
         .and_then(|liblinear_hyperparam| {
             parabel::model::TrainHyperParam::builder()

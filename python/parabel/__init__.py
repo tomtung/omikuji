@@ -99,6 +99,7 @@ class Trainer:
     linear_c: float = 1.0
     linear_weight_threshold: float = 0.1
     linear_max_iter: int = 20
+    linear_max_sparse_density: float = 0.15
 
     def train_on_data(self, data_path):
         """Train parabel model on the given dataset file."""
@@ -117,6 +118,7 @@ class Trainer:
             self.linear_c,
             self.linear_weight_threshold,
             self.linear_max_iter,
+            self.linear_max_sparse_density,
             dataset_ptr,
         )
         if model_ptr == ffi.NULL:
