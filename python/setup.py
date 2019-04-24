@@ -41,6 +41,7 @@ setup(
     zip_safe=False,
     platforms="any",
     setup_requires=["milksnake"],
+    install_requires=['milksnake'],
     milksnake_tasks=[build_native],
     classifiers=[
         "Programming Language :: Python :: 3",
