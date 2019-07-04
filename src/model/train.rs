@@ -120,8 +120,9 @@ impl<'a> TreeTrainer<'a> {
 
         let tree_height = Self::compute_tree_height(all_labels.len(), hyper_param.max_leaf_size);
 
-        let progress_bar =
-            Self::create_progress_bar(all_labels.len(), tree_height, hyper_param.n_trees);
+        let progress_bar = Mutex::new(create_progress_bar(
+            (all_labels.len() * hyper_param.n_trees) as u64,
+        ));
 
         Self {
             all_examples,
@@ -130,17 +131,6 @@ impl<'a> TreeTrainer<'a> {
             hyper_param,
             progress_bar,
         }
-    }
-
-    fn create_progress_bar(
-        n_labels: usize,
-        tree_height: usize,
-        n_trees: usize,
-    ) -> Mutex<ProgressBar> {
-        let n_classifiers_per_tree = 2usize.pow(tree_height as u32 + 1) - 2 + n_labels;
-        Mutex::new(create_progress_bar(
-            (n_trees * n_classifiers_per_tree) as u64,
-        ))
     }
 
     /// Determines the height of the tree.
@@ -187,7 +177,14 @@ impl<'a> TreeTrainer<'a> {
         } else {
             // Otherwise, branch and train subtrees recursively
             let label_clusters = label_cluster.split(self.hyper_param.cluster_eps);
-            debug_assert_eq!(2, label_clusters.len());
+
+            let n_clusters = label_clusters.len();
+            debug_assert_eq!(2, n_clusters);
+            self.progress_bar
+                .lock()
+                .expect("Failed to lock progress bar")
+                .total += n_clusters as u64;
+
             drop(label_cluster); // No longer needed
 
             let example_index_lists = label_clusters
