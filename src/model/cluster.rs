@@ -1,5 +1,5 @@
 use crate::mat_util::*;
-use itertools::{izip, Itertools};
+use itertools::izip;
 use ndarray::{Array2, ArrayViewMut2, Axis, ScalarOperand, ShapeBuilder};
 use num_traits::Float;
 use order_stat::kth_by;
@@ -88,7 +88,7 @@ where
     centroids
         .gencolumns_mut()
         .into_iter()
-        .foreach(dense_vec_l2_normalize);
+        .for_each(dense_vec_l2_normalize);
 
     total_similarities
         / N::from(n_examples)
