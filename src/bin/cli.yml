@@ -29,6 +29,11 @@ subcommands:
             long: min_branch_size
             takes_value: true
             default_value: "100"
+        - max_depth:
+            help: Maximum tree depth
+            long: max_depth
+            takes_value: true
+            default_value: "20"
         - cluster_eps:
             help: Epsilon value for determining clustering convergence
             long: cluster_eps

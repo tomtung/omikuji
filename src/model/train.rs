@@ -22,6 +22,9 @@ pub struct HyperParam {
     #[builder(default = "100")]
     pub min_branch_size: usize,
 
+    #[builder(default = "20")]
+    pub max_depth: usize,
+
     #[builder(default = "0.0001")]
     pub cluster_eps: f32,
 
@@ -148,7 +151,9 @@ impl<'a> TreeTrainer<'a> {
         examples: Arc<TrainingExamples>,
         label_cluster: Arc<LabelCluster>,
     ) -> TreeNode {
-        if label_cluster.len() < self.hyper_param.min_branch_size {
+        if depth >= self.hyper_param.max_depth
+            || label_cluster.len() < self.hyper_param.min_branch_size
+        {
             self.train_leaf_node(examples, &label_cluster.labels)
         } else {
             // Otherwise, branch and train subtrees recursively

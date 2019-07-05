@@ -34,6 +34,7 @@ fn parse_train_hyper_param(matches: &clap::ArgMatches) -> parabel::model::TrainH
         .linear(liblinear_hyperparam)
         .n_trees(value_t!(matches, "n_trees", usize).unwrap())
         .min_branch_size(value_t!(matches, "min_branch_size", usize).unwrap())
+        .max_depth(value_t!(matches, "max_depth", usize).unwrap())
         .cluster_eps(value_t!(matches, "cluster_eps", f32).unwrap())
         .centroid_threshold(value_t!(matches, "centroid_threshold", f32).unwrap())
         .build()
