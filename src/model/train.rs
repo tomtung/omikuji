@@ -20,7 +20,7 @@ pub struct HyperParam {
     pub n_trees: usize,
 
     #[builder(default = "100")]
-    pub max_leaf_size: usize,
+    pub min_branch_size: usize,
 
     #[builder(default = "0.0001")]
     pub cluster_eps: f32,
@@ -74,8 +74,8 @@ impl HyperParamBuilder {
             }
         }
 
-        if let Some(max_leaf_size) = self.max_leaf_size {
-            if max_leaf_size <= 1 {
+        if let Some(min_branch_size) = self.min_branch_size {
+            if min_branch_size <= 1 {
                 return Err("Maximum leaf size should be strictly larger than 1".to_owned());
             }
         }
@@ -87,7 +87,6 @@ impl HyperParamBuilder {
 struct TreeTrainer<'a> {
     all_examples: Arc<TrainingExamples<'a>>,
     all_labels: Arc<LabelCluster>,
-    tree_height: usize,
     hyper_param: HyperParam,
     progress_bar: Mutex<ProgressBar>,
 }
@@ -118,8 +117,6 @@ impl<'a> TreeTrainer<'a> {
         // Initialize examples set
         let all_examples = Arc::new(TrainingExamples::new_from_dataset(dataset));
 
-        let tree_height = Self::compute_tree_height(all_labels.len(), hyper_param.max_leaf_size);
-
         let progress_bar = Mutex::new(create_progress_bar(
             (all_labels.len() * hyper_param.n_trees) as u64,
         ));
@@ -127,24 +124,9 @@ impl<'a> TreeTrainer<'a> {
         Self {
             all_examples,
             all_labels,
-            tree_height,
             hyper_param,
             progress_bar,
         }
-    }
-
-    /// Determines the height of the tree.
-    ///
-    /// We use depth instead of leaf size for termination condition. This could cause over-splitting
-    /// of nodes, resulting leaves with less than half of the upper bound, but this also makes the
-    /// binary tree complete, which simplifies beam search.
-    #[inline]
-    fn compute_tree_height(n_labels: usize, max_leaf_size: usize) -> usize {
-        assert!(max_leaf_size > 1);
-        ((n_labels as f32) / (max_leaf_size as f32))
-            .log2()
-            .ceil()
-            .max(0.) as usize
     }
 
     #[inline]
@@ -156,23 +138,17 @@ impl<'a> TreeTrainer<'a> {
 
     fn train(&self) -> Tree {
         Tree {
-            root: self.train_subtree(
-                self.tree_height,
-                self.all_examples.clone(),
-                self.all_labels.clone(),
-            ),
+            root: self.train_subtree(0, self.all_examples.clone(), self.all_labels.clone()),
         }
     }
 
     fn train_subtree(
         &self,
-        height: usize,
+        depth: usize,
         examples: Arc<TrainingExamples>,
         label_cluster: Arc<LabelCluster>,
     ) -> TreeNode {
-        if height == 0 {
-            // If reached maximum depth, build and return a leaf node
-            assert!(label_cluster.labels.len() <= self.hyper_param.max_leaf_size);
+        if label_cluster.len() < self.hyper_param.min_branch_size {
             self.train_leaf_node(examples, &label_cluster.labels)
         } else {
             // Otherwise, branch and train subtrees recursively
@@ -195,14 +171,7 @@ impl<'a> TreeTrainer<'a> {
             let (children, classifier) = rayon::join(
                 {
                     let examples = examples.clone();
-                    || {
-                        self.train_child_nodes(
-                            height,
-                            examples,
-                            label_clusters,
-                            &example_index_lists,
-                        )
-                    }
+                    || self.train_child_nodes(depth, examples, label_clusters, &example_index_lists)
                 },
                 || {
                     self.train_classifier(
@@ -221,7 +190,7 @@ impl<'a> TreeTrainer<'a> {
 
     fn train_child_nodes(
         &self,
-        height: usize,
+        depth: usize,
         examples: Arc<TrainingExamples>,
         label_clusters: Vec<LabelCluster>,
         example_index_lists: &[Vec<usize>],
@@ -236,7 +205,7 @@ impl<'a> TreeTrainer<'a> {
                 let cluster_examples = examples.take_examples_by_indices(example_indices);
                 drop(examples); // No longer needed
                 self.train_subtree(
-                    height - 1,
+                    depth + 1,
                     Arc::new(cluster_examples),
                     Arc::new(label_cluster),
                 )
@@ -503,16 +472,5 @@ mod tests {
             ),
             HashMap::<Index, IndexValueVec>::from_iter(labels.into_iter().zip(vecs.into_iter()))
         );
-    }
-
-    #[test]
-    fn test_compute_tree_height() {
-        assert_eq!(TreeTrainer::compute_tree_height(2, 2), 0);
-        assert_eq!(TreeTrainer::compute_tree_height(3, 2), 1);
-        assert_eq!(TreeTrainer::compute_tree_height(2, 3), 0);
-        assert_eq!(TreeTrainer::compute_tree_height(3, 3), 0);
-        assert_eq!(TreeTrainer::compute_tree_height(4, 2), 1);
-        assert_eq!(TreeTrainer::compute_tree_height(5, 2), 2);
-        assert_eq!(TreeTrainer::compute_tree_height(6, 2), 2);
     }
 }

@@ -24,9 +24,9 @@ subcommands:
             long: n_trees
             takes_value: true
             default_value: "3"
-        - max_leaf_size:
-            help: Max number of labels in a leaf node
-            long: max_leaf_size
+        - min_branch_size:
+            help: Number of labels below which no futher clustering & branching is done
+            long: min_branch_size
             takes_value: true
             default_value: "100"
         - cluster_eps:

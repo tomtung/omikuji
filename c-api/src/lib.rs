@@ -154,7 +154,7 @@ pub enum LossType {
 #[no_mangle]
 pub unsafe extern "C" fn train_parabel_model(
     n_trees: size_t,
-    max_leaf_size: size_t,
+    min_branch_size: size_t,
     cluster_eps: c_float,
     centroid_threshold: c_float,
     linear_loss_type: LossType,
@@ -181,7 +181,7 @@ pub unsafe extern "C" fn train_parabel_model(
             parabel::model::TrainHyperParam::builder()
                 .linear(liblinear_hyperparam)
                 .n_trees(n_trees)
-                .max_leaf_size(max_leaf_size)
+                .min_branch_size(min_branch_size)
                 .cluster_eps(cluster_eps)
                 .centroid_threshold(centroid_threshold)
                 .build()

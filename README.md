@@ -105,7 +105,9 @@ OPTIONS:
         --linear.weight_threshold <linear.weight_threshold>
             Threshold for pruning weight vectors of linear classifiers [default: 0.1]
 
-        --max_leaf_size <max_leaf_size>                            Max number of labels in a leaf node [default: 100]
+        --min_branch_size <min_branch_size>
+            Number of labels below which no futher clustering & branching is done [default: 100]
+
         --model_path <PATH>
             Path to which the trained model will be saved if provided
 

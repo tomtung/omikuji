@@ -91,7 +91,7 @@ class Trainer:
     """Trainer for parabel model."""
 
     n_trees: int = 3
-    max_leaf_size: int = 100
+    min_branch_size: int = 100
     cluster_eps: float = 0.0001
     centroid_threshold: float = 0.0
     linear_loss_type: LossType = LossType.HINGE
@@ -110,7 +110,7 @@ class Trainer:
         dataset_ptr = ffi.gc(dataset_ptr, lib.free_parabel_data_set)
         model_ptr = lib.train_parabel_model(
             self.n_trees,
-            self.max_leaf_size,
+            self.min_branch_size,
             self.cluster_eps,
             self.centroid_threshold,
             lib.Hinge if self.linear_loss_type == LossType.HINGE else lib.Log,
