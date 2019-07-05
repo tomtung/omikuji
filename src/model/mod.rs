@@ -147,28 +147,10 @@ impl Tree {
         let mut next_level = Vec::<(&TreeNode, f32)>::with_capacity(beam_size * 2);
 
         curr_level.push((&self.root, 0.));
-        loop {
+
+        // Iterate until only leaves are left
+        while curr_level.iter().any(|(node, _)| !node.is_leaf()) {
             assert!(!curr_level.is_empty());
-
-            if curr_level.len() > beam_size {
-                curr_level.sort_unstable_by(|(_, score1), (_, score2)| {
-                    score2.partial_cmp(score1).unwrap_or_else(|| {
-                        panic!("Numeric error: unable to compare {} and {}", score1, score2)
-                    })
-                });
-                curr_level.truncate(beam_size);
-            }
-
-            // Iterate until we reach the leaves
-            if curr_level
-                .first()
-                .expect("Search beam should never be empty")
-                .0
-                .is_leaf()
-            {
-                break;
-            }
-
             next_level.clear();
             for &(node, node_score) in &curr_level {
                 match node {
@@ -181,11 +163,21 @@ impl Tree {
                         next_level
                             .extend(children.iter().zip_eq(child_scores.into_iter().cloned()));
                     }
-                    _ => unreachable!("The tree is not a complete binary tree."),
+                    TreeNode::LeafNode { .. } => {
+                        next_level.push((node, node_score));
+                    }
                 }
             }
 
             swap(&mut curr_level, &mut next_level);
+            if curr_level.len() > beam_size {
+                curr_level.sort_unstable_by(|(_, score1), (_, score2)| {
+                    score2.partial_cmp(score1).unwrap_or_else(|| {
+                        panic!("Numeric error: unable to compare {} and {}", score1, score2)
+                    })
+                });
+                curr_level.truncate(beam_size);
+            }
         }
 
         curr_level
@@ -200,7 +192,7 @@ impl Tree {
                         .zip_eq(label_scores.into_iter().cloned())
                         .collect_vec()
                 }
-                _ => unreachable!("The tree is not a complete binary tree."),
+                _ => unreachable!(),
             })
             .collect_vec()
     }
