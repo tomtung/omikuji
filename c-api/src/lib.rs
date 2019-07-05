@@ -1,5 +1,5 @@
 use itertools::Itertools;
-use libc::{c_void, int8_t, size_t, uint32_t};
+use libc::{c_void, size_t};
 use std::ffi::CStr;
 use std::fs::File;
 use std::io::{BufReader, BufWriter};
@@ -42,7 +42,7 @@ pub unsafe extern "C" fn load_parabel_model(path: *const c_char) -> *mut Parabel
 pub unsafe extern "C" fn save_parabel_model(
     model_ptr: *mut ParabelModel,
     path: *const c_char,
-) -> int8_t {
+) -> i8 {
     assert!(!model_ptr.is_null(), "Model should not be null");
     assert!(!path.is_null(), "Path should not be null");
     let model_ptr = model_ptr as *mut c_void as *mut parabel::Model;
@@ -86,10 +86,10 @@ pub unsafe extern "C" fn parabel_predict(
     model_ptr: *const ParabelModel,
     beam_size: size_t,
     input_len: size_t,
-    feature_indices: *const uint32_t,
+    feature_indices: *const u32,
     feature_values: *const c_float,
     output_len: size_t,
-    output_labels: *mut uint32_t,
+    output_labels: *mut u32,
     output_scores: *mut c_float,
 ) -> size_t {
     assert!(!model_ptr.is_null(), "Model should not be null");
@@ -162,7 +162,7 @@ pub unsafe extern "C" fn train_parabel_model(
     linear_eps: c_float,
     linear_c: c_float,
     linear_weight_threshold: c_float,
-    linear_max_iter: uint32_t,
+    linear_max_iter: u32,
     linear_max_sparse_density: c_float,
     dataset_ptr: *const ParabelDataSet,
 ) -> *mut ParabelModel {
@@ -202,7 +202,7 @@ pub unsafe extern "C" fn train_parabel_model(
 
 /// Initialize a simple logger that writes to stdout.
 #[no_mangle]
-pub extern "C" fn parabel_init_logger() -> int8_t {
+pub extern "C" fn parabel_init_logger() -> i8 {
     match simple_logger::init() {
         Ok(_) => 0,
         Err(_) => {
@@ -214,7 +214,7 @@ pub extern "C" fn parabel_init_logger() -> int8_t {
 
 /// Optionally initialize Rayon global thread pool with certain number of threads.
 #[no_mangle]
-pub extern "C" fn rayon_init_threads(n_threads: size_t) -> int8_t {
+pub extern "C" fn rayon_init_threads(n_threads: size_t) -> i8 {
     match rayon::ThreadPoolBuilder::new()
         .num_threads(n_threads as usize)
         .build_global()
