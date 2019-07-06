@@ -68,7 +68,7 @@ subcommands:
             takes_value: true
             default_value: "0.1"
         - linear.max_sparse_density:
-            help: Density threshold above which weight matrices are stored in dense format. Lower values results in larger model but faster prediction.
+            help: Density threshold above which weight vectors are stored in dense format. Lower values results in larger model but faster prediction.
             long: linear.max_sparse_density
             takes_value: true
             default_value: "0.15"

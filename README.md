@@ -100,7 +100,7 @@ OPTIONS:
             Max number of iterations for training each linear classifier [default: 20]
 
         --linear.max_sparse_density <linear.max_sparse_density>
-            Density threshold above which weight matrices are stored in dense format. Lower values results in larger
+            Density threshold above which weight vectors are stored in dense format. Lower values results in larger
             model but faster prediction. [default: 0.15]
         --linear.weight_threshold <linear.weight_threshold>
             Threshold for pruning weight vectors of linear classifiers [default: 0.1]

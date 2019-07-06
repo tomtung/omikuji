@@ -77,7 +77,7 @@ impl HyperParam {
             LossType::Hinge => solve_l2r_l2_svc,
             LossType::Log => solve_l2r_lr_dual,
         };
-        let weight_matrix = label_to_example_indices
+        let weights = label_to_example_indices
             .par_iter()
             .map(|indices| {
                 // For the current classifier, an example is positive iff its index is in the given list
@@ -87,37 +87,43 @@ impl HyperParam {
                 }
 
                 // Train the classifier
-                solver(
-                    feature_matrix,
-                    &labels,
-                    self.eps,
-                    self.c,
-                    self.c,
-                    self.max_iter,
-                )
-                .indexed_iter()
-                .filter_map(|(index, &value)| {
-                    // Prune weights using the given threshold
-                    if value.abs() <= self.weight_threshold {
-                        None
-                    } else {
-                        Some((index_to_feature[index], value))
-                    }
-                })
-                .collect_vec()
-            })
-            .collect::<Vec<_>>()
-            .copy_to_csrmat(n_features);
+                let sparse_w = {
+                    let (indices, data) = solver(
+                        feature_matrix,
+                        &labels,
+                        self.eps,
+                        self.c,
+                        self.c,
+                        self.max_iter,
+                    )
+                    .indexed_iter()
+                    .filter_map(|(index, &value)| {
+                        if value.abs() <= self.weight_threshold {
+                            None
+                        } else {
+                            Some((index_to_feature[index], value))
+                        }
+                    })
+                    .unzip();
 
-        // Store as dense matrix if not sparse enough, which greatly speeds up prediction
-        let density =
-            weight_matrix.nnz() as f32 / (weight_matrix.rows() * weight_matrix.cols()) as f32;
+                    SparseVec::new(n_features, indices, data)
+                };
+
+                let density = sparse_w.nnz() as f32 / sparse_w.dim() as f32;
+
+                // Store as dense vector if not sparse enough, which greatly speeds up prediction
+                if density <= self.max_sparse_density {
+                    Vector::Sparse(sparse_w)
+                } else {
+                    let mut dense_w = DenseVec::zeros(n_features);
+                    sparse_w.scatter(dense_w.as_slice_mut().unwrap());
+                    Vector::Dense(dense_w)
+                }
+            })
+            .collect::<Vec<_>>();
+
         MultiLabelClassifier {
-            weights: if density < self.max_sparse_density {
-                Mat::Sparse(weight_matrix)
-            } else {
-                Mat::Dense(weight_matrix.to_dense())
-            },
+            weights,
             loss_type: self.loss_type,
         }
     }
@@ -126,14 +132,14 @@ impl HyperParam {
 /// A one-vs-all multi-label classifier
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct MultiLabelClassifier {
-    weights: Mat,
+    weights: Vec<Vector>,
     loss_type: LossType,
 }
 
 impl MultiLabelClassifier {
     /// Predict scores for each label.
     pub fn predict(&self, feature_vec: &SparseVec) -> DenseVec {
-        let mut scores = self.weights.dot_vec(feature_vec);
+        let mut scores = DenseVec::from_iter(self.weights.iter().map(|w| w.dot(feature_vec)));
         match self.loss_type {
             LossType::Log => scores.mapv_inplace(|v| -(-v).exp().ln_1p()),
             LossType::Hinge => scores.mapv_inplace(|v| -(1. - v).max(0.).powi(2)),

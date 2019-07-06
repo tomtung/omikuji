@@ -10,29 +10,19 @@ pub type SparseVec = sprs::CsVecI<f32, Index>;
 pub type SparseMat = sprs::CsMatI<f32, Index>;
 pub type SparseMatView<'a> = sprs::CsMatViewI<'a, f32, Index>;
 pub type DenseVec = ndarray::Array1<f32>;
-pub type DenseMat = ndarray::Array2<f32>;
 
-/// A matrix, can be either dense or sparse.
+/// A vector, can be either dense or sparse.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub enum Mat {
-    Sparse(SparseMat),
-    Dense(DenseMat),
+pub(crate) enum Vector {
+    Dense(DenseVec),
+    Sparse(SparseVec),
 }
 
-impl Mat {
-    pub fn dot_vec(&self, vec: &SparseVec) -> DenseVec {
+impl Vector {
+    pub fn dot(&self, that: &SparseVec) -> f32 {
         match self {
-            Mat::Dense(mat) => DenseVec::from_iter(mat.outer_iter().map(|w| vec.dot_dense(w))),
-            Mat::Sparse(mat) => DenseVec::from_iter(mat.outer_iterator().map(|row| {
-                let m = vec.nnz().min(row.nnz());
-                let n = vec.nnz().max(row.nnz());
-                // Rough but practical heuristic: binary search only if one is much denser than the other
-                if n / m >= 10 {
-                    sprs::prod::csvec_dot_by_binary_search(vec.view(), row)
-                } else {
-                    vec.dot(&row)
-                }
-            })),
+            Vector::Dense(this) => that.dot_dense(this.view()),
+            Vector::Sparse(this) => that.dot(this),
         }
     }
 }
