@@ -405,17 +405,10 @@ impl LabelCluster {
     }
 
     fn split(&self, cluster_eps: f32) -> Vec<Self> {
-        let label_assignments = cluster::balanced_2means(&self.feature_matrix.view(), cluster_eps);
-        assert_eq!(self.labels.len(), label_assignments.len());
-
-        let (true_indices, false_indices) =
-            (0..self.labels.len()).partition::<Vec<_>, _>(|&i| label_assignments[i]);
-        assert!(((true_indices.len() as i64) - (false_indices.len() as i64)).abs() <= 1);
-
-        vec![
-            self.take_labels_by_indices(&true_indices),
-            self.take_labels_by_indices(&false_indices),
-        ]
+        cluster::balanced_2means(&self.feature_matrix.view(), cluster_eps)
+            .iter()
+            .map(|labels| self.take_labels_by_indices(labels))
+            .collect_vec()
     }
 }
 

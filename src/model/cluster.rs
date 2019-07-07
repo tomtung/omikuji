@@ -1,118 +1,23 @@
 use crate::mat_util::*;
-use itertools::izip;
-use ndarray::{Array2, ArrayViewMut2, Axis, ScalarOperand, ShapeBuilder};
+use itertools::{izip, Itertools};
+use ndarray::{Array2, ArrayView2, ArrayViewMut2, Axis, ScalarOperand, ShapeBuilder};
 use num_traits::Float;
 use order_stat::kth_by;
 use rand::prelude::*;
 use sprs::prod::csr_mulacc_dense_colmaj;
 use sprs::{CsMatViewI, SpIndex};
 use std::fmt::Display;
+use std::iter::Sum;
 use std::ops::{AddAssign, DivAssign};
 
-fn balanced_2means_iterate<N, I>(
-    feature_matrix: &CsMatViewI<N, I>,
-    partitions: &mut [bool],
-    mut centroids: ArrayViewMut2<N>,
-    mut similarities: ArrayViewMut2<N>,
-    index_diff_pairs: &mut Vec<(usize, N)>,
-) -> N
+fn initialize_centroids<N, I>(feature_matrix: &CsMatViewI<N, I>, k: usize) -> Array2<N>
 where
     I: SpIndex,
-    N: Float + AddAssign + DivAssign + ScalarOperand + Display,
+    N: Float + AddAssign,
 {
-    debug_assert!(feature_matrix.is_csr());
-    debug_assert!(feature_matrix.rows() >= 2);
-    debug_assert_eq!(feature_matrix.rows(), partitions.len());
-    debug_assert_eq!(2, centroids.shape()[1]);
-    debug_assert!(
-        !centroids.is_standard_layout(),
-        "Centroid matrix should be in column major order"
-    );
-
-    let n_examples = feature_matrix.rows();
-
-    // Compute cosine similarities between each label vector and both centroids
-    // as well as their difference
-    similarities.fill(N::zero());
-    csr_mulacc_dense_colmaj(
-        feature_matrix.view(),
-        centroids.view(),
-        similarities.view_mut(),
-    );
-
-    index_diff_pairs.clear();
-    index_diff_pairs.extend(
-        similarities
-            .axis_iter(Axis(0))
-            .map(|row| {
-                assert_eq!(2, row.len());
-                row[[0]] - row[[1]]
-            })
-            .enumerate(),
-    );
-
-    // Reorder by differences, where the two halves will be assigned different partitions
-    let mid_rank = n_examples / 2 - 1;
-    kth_by(index_diff_pairs, mid_rank, |(_, ld), (_, rd)| {
-        rd.partial_cmp(ld)
-            .unwrap_or_else(|| panic!("Numeric error: unable to compare {} and {}", ld, rd))
-    });
-
-    // Re-assign partitions and compute new centroids accordingly
-    let mut total_similarities = N::zero();
-    centroids.fill(N::zero());
-    for (r, &(i, _)) in index_diff_pairs.iter().enumerate() {
-        let p = r > mid_rank;
-        let c = p as usize;
-
-        // Update partition assignment
-        partitions[i] = p;
-
-        // Update sum of cosine similarities to assigned centroid
-        total_similarities += similarities[[i, c]];
-
-        // Update centroid
-        dense_add_assign_csvec(
-            centroids.index_axis_mut(Axis(1), c),
-            feature_matrix.outer_view(i).unwrap_or_else(|| {
-                panic!(
-                    "Failed to take {}-th outer view for feature_matrix of shape {:?}",
-                    i,
-                    feature_matrix.shape()
-                )
-            }),
-        );
-    }
-
-    // Normalize to get the new centroids
-    centroids
-        .gencolumns_mut()
-        .into_iter()
-        .for_each(dense_vec_l2_normalize);
-
-    total_similarities
-        / N::from(n_examples)
-            .unwrap_or_else(|| panic!("Failed to convert {} to generic type N", n_examples))
-}
-
-/// Cluster vectors into 2 balanced subsets.
-///
-/// Each row of the feature matrix is assumed to be l2-normalized.
-pub fn balanced_2means<N, I>(feature_matrix: &CsMatViewI<N, I>, threshold: N) -> Vec<bool>
-where
-    I: SpIndex,
-    N: Float + AddAssign + DivAssign + ScalarOperand + Display,
-{
-    assert!(feature_matrix.is_csr());
-
-    let n_examples = feature_matrix.rows();
-    let n_features = feature_matrix.cols();
-    assert!(n_examples >= 2);
-
-    // Randomly pick 2 vectors as initial centroids
-    let mut centroids = Array2::zeros((n_features, 2).f());
+    let mut centroids = Array2::zeros((feature_matrix.cols(), k).f());
     for (i, c) in izip!(
-        rand::seq::index::sample(&mut thread_rng(), n_examples, 2).into_iter(),
+        rand::seq::index::sample(&mut thread_rng(), feature_matrix.rows(), k).into_iter(),
         centroids.gencolumns_mut()
     ) {
         dense_add_assign_csvec(
@@ -127,93 +32,153 @@ where
         );
     }
 
-    let mut prev_avg_similarity = N::from(-2.).expect("Failed to convert -2. to generic type N");
-    let mut partitions = vec![false; n_examples];
+    centroids
+}
 
-    // Temporary workspace; declared here to only allocate once
-    let mut similarities = Array2::zeros((n_examples, 2));
-    let mut index_diff_pairs = Vec::<(usize, N)>::with_capacity(n_examples);
-    loop {
-        let avg_similarity = balanced_2means_iterate(
-            feature_matrix,
-            &mut partitions,
-            centroids.view_mut(),
-            similarities.view_mut(),
-            &mut index_diff_pairs,
+fn calculate_similarities_to_centroids<N, I>(
+    feature_matrix: &CsMatViewI<N, I>,
+    centroids: ArrayView2<N>,
+    mut similarities: ArrayViewMut2<N>,
+) where
+    I: SpIndex,
+    N: Float,
+{
+    debug_assert!(feature_matrix.is_csr());
+    debug_assert_eq!(similarities.rows(), feature_matrix.rows());
+    debug_assert_eq!(centroids.rows(), feature_matrix.cols());
+    debug_assert_eq!(similarities.cols(), centroids.cols());
+
+    similarities.fill(N::zero());
+    csr_mulacc_dense_colmaj(
+        feature_matrix.view(),
+        centroids.view(),
+        similarities.view_mut(),
+    );
+}
+
+fn balanced_2means_update_partitions<N>(similarities: ArrayView2<N>, partitions: &mut [usize])
+where
+    N: Float + Display,
+{
+    debug_assert_eq!(similarities.rows(), partitions.len());
+    debug_assert_eq!(similarities.cols(), 2);
+
+    let mut index_diff_pairs = similarities
+        .axis_iter(Axis(0))
+        .map(|row| {
+            assert_eq!(2, row.len());
+            row[[0]] - row[[1]]
+        })
+        .enumerate()
+        .collect_vec();
+
+    // Reorder by differences, where the two halves will be assigned different partitions
+    let mid_rank = partitions.len() / 2 - 1;
+    kth_by(&mut index_diff_pairs, mid_rank, |(_, ld), (_, rd)| {
+        rd.partial_cmp(ld)
+            .unwrap_or_else(|| panic!("Numeric error: unable to compare {} and {}", ld, rd))
+    });
+
+    for (r, &(i, _)) in index_diff_pairs.iter().enumerate() {
+        // Update partition assignment
+        partitions[i] = (r > mid_rank) as usize;
+    }
+}
+
+fn update_centroids<N, I>(
+    feature_matrix: &CsMatViewI<N, I>,
+    partitions: &[usize],
+    mut centroids: ArrayViewMut2<N>,
+) where
+    I: SpIndex,
+    N: Float + AddAssign + DivAssign + ScalarOperand,
+{
+    debug_assert_eq!(feature_matrix.rows(), partitions.len());
+    debug_assert_eq!(feature_matrix.cols(), centroids.rows());
+
+    // Update centroids for next iteration
+    centroids.fill(N::zero());
+    for (i, &p) in partitions.iter().enumerate() {
+        debug_assert!(p < centroids.cols());
+
+        // Update centroid
+        dense_add_assign_csvec(
+            centroids.index_axis_mut(Axis(1), p),
+            feature_matrix.outer_view(i).unwrap_or_else(|| {
+                panic!(
+                    "Failed to take {}-th outer view for feature_matrix of shape {:?}",
+                    i,
+                    feature_matrix.shape()
+                )
+            }),
         );
+    }
+    // Normalize to get the new centroids
+    centroids
+        .gencolumns_mut()
+        .into_iter()
+        .for_each(dense_vec_l2_normalize);
+}
+
+/// Cluster vectors into 2 balanced subsets.
+///
+/// Each row of the feature matrix is assumed to be l2-normalized.
+pub fn balanced_2means<N, I>(feature_matrix: &CsMatViewI<N, I>, threshold: N) -> Vec<Vec<usize>>
+where
+    I: SpIndex,
+    N: Float + AddAssign + DivAssign + ScalarOperand + Display + Sum,
+{
+    assert!(feature_matrix.is_csr());
+
+    let k = 2;
+    let n_examples = feature_matrix.rows();
+    assert!(n_examples >= k);
+
+    // Randomly pick 2 vectors as initial centroids
+    let mut centroids = initialize_centroids(feature_matrix, k);
+
+    let mut partitions = vec![0; n_examples];
+    let mut similarities = Array2::zeros((n_examples, k));
+
+    let mut prev_avg_similarity = N::from(-2.).expect("Failed to convert -2. to generic type N");
+    loop {
+        // Compute cosine similarities between each label vector and both centroids
+        // as well as their difference
+        calculate_similarities_to_centroids(
+            feature_matrix,
+            centroids.view(),
+            similarities.view_mut(),
+        );
+
+        // Update partition assignments
+        balanced_2means_update_partitions(similarities.view(), &mut partitions);
+
+        // Calculate average similarities
+        let avg_similarity = partitions
+            .iter()
+            .enumerate()
+            .map(|(i, &p)| similarities[[i, p]])
+            .sum::<N>()
+            / N::from(feature_matrix.rows()).unwrap();
+
         assert!(
             avg_similarity + N::from(1e-3).expect("Failed to convert 1e-3 to generic type N")
                 >= prev_avg_similarity
         );
+
         // Stop iteration if converged
         if avg_similarity - prev_avg_similarity < threshold {
-            return partitions;
+            break;
         } else {
             prev_avg_similarity = avg_similarity;
+            update_centroids(feature_matrix, &partitions, centroids.view_mut());
         }
     }
-}
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use assert_approx_eq::assert_approx_eq;
-    use ndarray::array;
-    use sprs::CsMat;
-
-    #[test]
-    fn test_balanced_2means_iterate() {
-        let feature_matrix = CsMat::csr_from_dense(
-            array![
-                [1., 0.],
-                [0., -1.],
-                [0.5, 0.75f32.sqrt()],
-                [-0.75f32.sqrt(), -0.5],
-            ]
-            .view(),
-            1e-3,
-        );
-        let mut partitions = vec![false; 4];
-        let mut centroids = array![
-            [0.5f32.sqrt(), 0.5f32.sqrt()],
-            [-0.5f32.sqrt(), -0.5f32.sqrt()],
-        ]
-        .reversed_axes();
-        assert_approx_eq!(
-            0.836516303737808,
-            balanced_2means_iterate(
-                &feature_matrix.view(),
-                &mut partitions,
-                centroids.view_mut(),
-                Array2::zeros((4, 2)).view_mut(),
-                &mut Vec::new(),
-            )
-        );
-        assert_eq!(vec![false, true, false, true], partitions);
-        assert!(centroids.all_close(
-            &array![[0.75f32.sqrt(), 0.5], [-0.5, -0.75f32.sqrt()]].reversed_axes(),
-            1e-5
-        ));
+    let mut clusters = vec![Vec::new(); k];
+    for (i, p) in partitions.into_iter().enumerate() {
+        clusters[p].push(i);
     }
 
-    #[test]
-    fn test_balanced_2means() {
-        let feature_matrix = CsMat::csr_from_dense(
-            array![
-                [1., 0.],
-                [0., -1.],
-                [0.5, 0.75f32.sqrt()],
-                [-0.75f32.sqrt(), -0.5],
-                [1., 0.],
-                [0., -1.],
-                [0.5, 0.75f32.sqrt()],
-                [-0.75f32.sqrt(), -0.5],
-            ]
-            .view(),
-            1e-3,
-        );
-        let partitions = balanced_2means(&feature_matrix.view(), 1e-4);
-        assert_eq!(4, partitions.iter().cloned().filter(|&p| p).count());
-        assert_eq!(4, partitions.iter().cloned().filter(|&p| !p).count());
-    }
+    return clusters;
 }
