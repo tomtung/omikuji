@@ -8,7 +8,6 @@ authors = ["Tom Dong <tom.tung.dyb@gmail.com>"]
 bincode = "1.1"
 bit-set = "0.5"
 clap = { version = "2.33", features = ["yaml"], optional = true }
-derive_builder = "0.7"
 hashbrown = "0.5"
 itertools = "0.8"
 log = "0.4"

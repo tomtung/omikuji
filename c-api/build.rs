@@ -9,6 +9,7 @@ fn main() {
         .with_crate(&crate_dir)
         .with_language(cbindgen::Language::C)
         .with_include_guard("PARABEL_H")
+        .with_item_prefix("PARABEL_")
         .generate()
         .expect("Unable to generate C bindings")
         .write_to_file("target/include/parabel.h");

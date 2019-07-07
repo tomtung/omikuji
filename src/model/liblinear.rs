@@ -1,6 +1,5 @@
 use crate::mat_util::*;
 use crate::Index;
-use derive_builder::Builder;
 use itertools::Itertools;
 use rand::prelude::*;
 use rayon::prelude::*;
@@ -18,39 +17,54 @@ pub enum LossType {
 }
 
 /// Hyper-parameter settings for training liblinear model.
-#[derive(Builder, Copy, Clone, Debug, Serialize, Deserialize)]
+#[derive(Copy, Clone, Debug, Serialize, Deserialize)]
 pub struct HyperParam {
-    #[builder(default = "LossType::Hinge")]
     pub loss_type: LossType,
-
-    #[builder(default = "0.1")]
     pub eps: f32,
-
-    #[builder(default = "1.")]
     pub c: f32,
-
-    #[builder(default = "0.1")]
     pub weight_threshold: f32,
-
-    #[builder(default = "20")]
     pub max_iter: u32,
-
-    #[builder(default = "0.15")]
     pub max_sparse_density: f32,
 }
 
 impl Default for HyperParam {
     fn default() -> Self {
-        HyperParamBuilder::default()
-            .build()
-            .expect("Failed to build default hyper-parameter")
+        Self {
+            loss_type: LossType::Hinge,
+            eps: 0.1,
+            c: 1.,
+            weight_threshold: 0.1,
+            max_iter: 20,
+            max_sparse_density: 0.15,
+        }
     }
 }
 
 impl HyperParam {
-    /// Create a builder object.
-    pub fn builder() -> HyperParamBuilder {
-        HyperParamBuilder::default()
+    /// Check if the hyper-parameter settings are valid.
+    pub fn validate(&self) -> Result<(), String> {
+        if self.eps <= 0. {
+            Err(format!("eps must be positive, but is {}", self.eps))
+        } else if self.c <= 0. {
+            Err(format!("c must be positive, but is {}", self.c))
+        } else if self.weight_threshold < 0. {
+            Err(format!(
+                "weight_threshold must be non-negative, but is {}",
+                self.weight_threshold
+            ))
+        } else if self.max_iter == 0 {
+            Err(format!(
+                "max_iter must be positive, but is {}",
+                self.max_iter
+            ))
+        } else if self.max_sparse_density < 0. {
+            Err(format!(
+                "max_sparse_density must be non-negative, but is {}",
+                self.max_sparse_density
+            ))
+        } else {
+            Ok(())
+        }
     }
 
     /// Adapt regularization based on sample size relative to overall training data size.
@@ -72,6 +86,8 @@ impl HyperParam {
         index_to_feature: &[Index],
         n_features: usize,
     ) -> MultiLabelClassifier {
+        self.validate().unwrap();
+
         assert!(feature_matrix.is_csr());
         let solver = match self.loss_type {
             LossType::Hinge => solve_l2r_l2_svc,

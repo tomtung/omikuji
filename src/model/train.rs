@@ -3,7 +3,6 @@ use crate::data::DataSet;
 use crate::mat_util::*;
 use crate::util::{create_progress_bar, ProgressBar};
 use crate::{Index, IndexSet, IndexValueVec};
-use derive_builder::Builder;
 use hashbrown::HashMap;
 use itertools::{izip, Itertools};
 use log::info;
@@ -13,32 +12,54 @@ use std::iter::FromIterator;
 use std::sync::{Arc, Mutex};
 
 /// Model training hyper-parameters.
-#[derive(Builder, Copy, Clone, Debug, Serialize, Deserialize)]
-#[builder(build_fn(validate = "Self::validate"))]
+#[derive(Copy, Clone, Debug, Serialize, Deserialize)]
 pub struct HyperParam {
-    #[builder(default = "3")]
     pub n_trees: usize,
-
-    #[builder(default = "100")]
     pub min_branch_size: usize,
-
-    #[builder(default = "20")]
     pub max_depth: usize,
-
-    #[builder(default = "0.0001")]
     pub cluster_eps: f32,
-
-    #[builder(default = "0.")]
     pub centroid_threshold: f32,
-
-    #[builder(default)]
     pub linear: liblinear::HyperParam,
 }
 
+impl Default for HyperParam {
+    fn default() -> Self {
+        Self {
+            n_trees: 3,
+            min_branch_size: 100,
+            max_depth: 20,
+            cluster_eps: 0.0001,
+            centroid_threshold: 0.,
+            linear: liblinear::HyperParam::default(),
+        }
+    }
+}
+
 impl HyperParam {
-    /// Create a builder object.
-    pub fn builder() -> HyperParamBuilder {
-        HyperParamBuilder::default()
+    /// Check if the hyper-parameter settings are valid.
+    pub fn validate(&self) -> Result<(), String> {
+        if self.n_trees == 0 {
+            Err(format!("n_trees must be positive, but is {}", self.n_trees))
+        } else if self.min_branch_size <= 1 {
+            Err(format!(
+                "min_branch_size must be greater than 1, but is {}",
+                self.min_branch_size
+            ))
+        } else if self.cluster_eps <= 0. {
+            Err(format!(
+                "cluster_eps must be positive, but is {}",
+                self.cluster_eps
+            ))
+        } else if self.centroid_threshold < 0. {
+            Err(format!(
+                "centroid_threshold must be non-negative, but is {}",
+                self.centroid_threshold
+            ))
+        } else if let Err(msg) = self.linear.validate() {
+            Err(format!("Invalid liblinear hyper-parameter; {}", msg))
+        } else {
+            Ok(())
+        }
     }
 
     /// Train a parabel model on the given dataset.
@@ -46,6 +67,8 @@ impl HyperParam {
     /// Here we take ownership of the dataset object to perform necessary prepossessing. One can
     /// choose to clone a dataset before passing it in to avoid losing the original data.
     pub fn train(&self, mut dataset: DataSet) -> Model {
+        self.validate().unwrap();
+
         info!("Training Parabel model with hyper-parameters {:?}", self);
         let start_t = time::precise_time_s();
 
@@ -66,24 +89,6 @@ impl HyperParam {
             trees,
             n_features: dataset.n_features,
         }
-    }
-}
-
-impl HyperParamBuilder {
-    fn validate(&self) -> Result<(), String> {
-        if let Some(n_trees) = self.n_trees {
-            if n_trees == 0 {
-                return Err("The model must have at least 1 tree".to_owned());
-            }
-        }
-
-        if let Some(min_branch_size) = self.min_branch_size {
-            if min_branch_size <= 1 {
-                return Err("Maximum leaf size should be strictly larger than 1".to_owned());
-            }
-        }
-
-        Ok(())
     }
 }
 

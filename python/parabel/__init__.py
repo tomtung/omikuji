@@ -1,17 +1,13 @@
 __version__ = "0.0.1"
-__all__ = ["Model", "LossType", "Trainer", "init_rayon_threads"]
+__all__ = ["Model", "LossType", "init_rayon_threads"]
 
 from ._libparabel import lib, ffi
-
-try:
-    from dataclasses import dataclass
-except ImportError:
-    # Give up on the niceties of dataclass for Python <3.7
-    def dataclass(cls):
-        return cls
-
-
 from enum import Enum
+
+
+class LossType(Enum):
+    HINGE = lib.Hinge
+    LOG = lib.Log
 
 
 class Model(object):
@@ -23,7 +19,7 @@ class Model(object):
         self._model_ptr = ffi.gc(model_ptr, lib.free_parabel_model)
 
     @classmethod
-    def load(cls, path):
+    def load(cls, path: str):
         """Load parabel model from file of the given path."""
         model_ptr = lib.load_parabel_model(ffi.new("char[]", path.encode()))
         if model_ptr == ffi.NULL:
@@ -80,49 +76,24 @@ class Model(object):
 
         return output
 
+    @classmethod
+    def default_hyper_param(cls):
+        """Get default training hyper-parameters."""
+        return lib.parabel_default_hyper_param()
 
-class LossType(Enum):
-    HINGE = 0
-    LOG = 1
-
-
-@dataclass
-class Trainer:
-    """Trainer for parabel model."""
-
-    n_trees: int = 3
-    min_branch_size: int = 100
-    max_depth: int = 20
-    cluster_eps: float = 0.0001
-    centroid_threshold: float = 0.0
-    linear_loss_type: LossType = LossType.HINGE
-    linear_eps: float = 0.1
-    linear_c: float = 1.0
-    linear_weight_threshold: float = 0.1
-    linear_max_iter: int = 20
-    linear_max_sparse_density: float = 0.15
-
-    def train_on_data(self, data_path):
-        """Train parabel model on the given dataset file."""
+    @classmethod
+    def train_on_data(cls, data_path: str, hyper_param=None):
+        """Train a model with the given data and hyper-parameters."""
         dataset_ptr = lib.load_parabel_data_set(ffi.new("char[]", data_path.encode()))
         if dataset_ptr == ffi.NULL:
             raise RuntimeError(f"Failed to load data from {data_path}")
 
         dataset_ptr = ffi.gc(dataset_ptr, lib.free_parabel_data_set)
-        model_ptr = lib.train_parabel_model(
-            self.n_trees,
-            self.min_branch_size,
-            self.max_depth,
-            self.cluster_eps,
-            self.centroid_threshold,
-            lib.Hinge if self.linear_loss_type == LossType.HINGE else lib.Log,
-            self.linear_eps,
-            self.linear_c,
-            self.linear_weight_threshold,
-            self.linear_max_iter,
-            self.linear_max_sparse_density,
-            dataset_ptr,
-        )
+
+        if hyper_param is None:
+            hyper_param = cls.default_hyper_param()
+
+        model_ptr = lib.train_parabel_model(dataset_ptr, hyper_param)
         if model_ptr == ffi.NULL:
             raise RuntimeError(f"Failed to train model")
 

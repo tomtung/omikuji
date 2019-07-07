@@ -46,8 +46,9 @@ The following script demonstrates how to use the Python binding to train a model
 import parabel
 
 # Train
-trainer = parabel.Trainer()
-model = trainer.train_on_data("./eurlex_train.txt")
+hyper_param = parabel.Model.default_hyper_param()
+hyper_param.n_trees = 5
+model = parabel.Model.train_on_data("./eurlex_train.txt", hyper_param)
 
 # Serialize & de-serialize
 model.save("model.bin")
