@@ -87,6 +87,11 @@ subcommands:
             long: cluster.eps
             takes_value: true
             default_value: "0.0001"
+        - cluster.min_size:
+            help: Clusters with sizes smaller than this threshold are merged into other clusters
+            long: cluster.min_size
+            takes_value: true
+            default_value: "2"
   - test:
       about: Test an existing Parabel model
       args:

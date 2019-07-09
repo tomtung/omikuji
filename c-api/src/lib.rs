@@ -165,6 +165,7 @@ pub struct HyperParam {
     pub cluster_k: size_t,
     pub cluster_balanced: bool,
     pub cluster_eps: f32,
+    pub cluster_min_size: usize,
 }
 
 impl From<parabel::model::TrainHyperParam> for HyperParam {
@@ -186,6 +187,7 @@ impl From<parabel::model::TrainHyperParam> for HyperParam {
             cluster_k: hyperparam.cluster.k,
             cluster_balanced: hyperparam.cluster.balanced,
             cluster_eps: hyperparam.cluster.eps,
+            cluster_min_size: hyperparam.cluster.min_size,
         }
     }
 }
@@ -213,6 +215,7 @@ impl TryInto<parabel::model::TrainHyperParam> for HyperParam {
         hyper_param.cluster.k = self.cluster_k;
         hyper_param.cluster.balanced = self.cluster_balanced;
         hyper_param.cluster.eps = self.cluster_eps;
+        hyper_param.cluster.min_size = self.cluster_min_size;
 
         if let Err(msg) = hyper_param.validate() {
             Err(msg)

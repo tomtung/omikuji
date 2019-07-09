@@ -19,6 +19,7 @@ pub struct HyperParam {
     pub k: usize,
     pub balanced: bool,
     pub eps: f32,
+    pub min_size: usize,
 }
 
 impl Default for HyperParam {
@@ -27,6 +28,7 @@ impl Default for HyperParam {
             k: 2,
             balanced: true,
             eps: 0.0001,
+            min_size: 2,
         }
     }
 }
@@ -38,6 +40,11 @@ impl HyperParam {
             Err(format!("k must be positive, but is {}", self.k))
         } else if self.eps <= 0. {
             Err(format!("eps must be positive, but is {}", self.eps))
+        } else if self.min_size == 0 {
+            Err(format!(
+                "min_size must be positive, but is {}",
+                self.min_size
+            ))
         } else {
             Ok(())
         }
@@ -94,6 +101,30 @@ impl HyperParam {
         for (i, p) in partitions.into_iter().enumerate() {
             clusters[p].push(i);
         }
+
+        // Disband clusters smaller than the given threshold
+        loop {
+            // Find the smallest, non-empty cluster
+            let p = (0..self.k)
+                .filter(|&p| !clusters[p].is_empty())
+                .min_by_key(|&p| clusters[p].len())
+                .unwrap();
+
+            // Break if the smallest cluster is large enough, or if it already contains all examples
+            if clusters[p].len() >= self.min_size || clusters[p].len() == n_examples {
+                break;
+            }
+
+            similarities.column_mut(p).fill(N::neg_infinity());
+            while let Some(i) = clusters[p].pop() {
+                let (s, new_p) = find_max(similarities.row(i)).unwrap();
+                assert!(N::is_finite(s));
+                assert_ne!(p, new_p);
+                clusters[new_p].push(i);
+            }
+        }
+
+        // Only keep non-empty clusters
         clusters.retain(|c| !c.is_empty());
 
         clusters

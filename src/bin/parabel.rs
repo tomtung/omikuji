@@ -37,6 +37,7 @@ fn parse_train_hyper_param(matches: &clap::ArgMatches) -> parabel::model::TrainH
     hyper_param.cluster.k = value_t!(matches, "cluster.k", usize).unwrap();
     hyper_param.cluster.balanced = matches.occurrences_of("cluster.unbalanced") == 0;
     hyper_param.cluster.eps = value_t!(matches, "cluster.eps", f32).unwrap();
+    hyper_param.cluster.min_size = value_t!(matches, "cluster.min_size", usize).unwrap();
 
     hyper_param.validate().unwrap();
     hyper_param
