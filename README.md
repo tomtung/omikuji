@@ -75,18 +75,23 @@ parabel-train
 Train a new Parabel model
 
 USAGE:
-    parabel train [OPTIONS] <training_data>
+    parabel train [FLAGS] [OPTIONS] <training_data>
 
 FLAGS:
-    -h, --help       Prints help information
-    -V, --version    Prints version information
+        --cluster.unbalanced    Perform regular k-means clustering instead of balanced k-means clustering
+    -h, --help                  Prints help information
+    -V, --version               Prints version information
 
 OPTIONS:
         --centroid_threshold <centroid_threshold>
             Threshold for pruning label centroid vectors [default: 0.0]
 
-        --cluster_eps <cluster_eps>
+        --cluster.eps <cluster.eps>
             Epsilon value for determining clustering convergence [default: 0.0001]
+
+        --cluster.k <cluster.k>                                    Number of clusters [default: 2]
+        --cluster.min_size <cluster.min_size>
+            Clusters with sizes smaller than this threshold are merged into other clusters [default: 2]
 
         --linear.c <linear.c>
             Cost co-efficient for regularizing linear classifiers [default: 1.0]
@@ -102,10 +107,11 @@ OPTIONS:
 
         --linear.max_sparse_density <linear.max_sparse_density>
             Density threshold above which weight vectors are stored in dense format. Lower values results in larger
-            model but faster prediction. [default: 0.15]
+            model but faster prediction [default: 0.15]
         --linear.weight_threshold <linear.weight_threshold>
             Threshold for pruning weight vectors of linear classifiers [default: 0.1]
 
+        --max_depth <max_depth>                                    Maximum tree depth [default: 20]
         --min_branch_size <min_branch_size>
             Number of labels below which no futher clustering & branching is done [default: 100]
 
