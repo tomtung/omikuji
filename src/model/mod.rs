@@ -8,8 +8,10 @@ use crate::{Index, IndexValueVec};
 use hashbrown::HashMap;
 use itertools::Itertools;
 use log::info;
+use ordered_float::NotNan;
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
+use std::cmp::Reverse;
 use std::io;
 use std::mem::swap;
 
@@ -50,11 +52,7 @@ impl Model {
             .iter()
             .map(|(&label, &total_score)| (label, total_score / self.trees.len() as f32))
             .collect_vec();
-        label_score_pairs.sort_unstable_by(|(_, score1), (_, score2)| {
-            score2.partial_cmp(score1).unwrap_or_else(|| {
-                panic!("Numeric error: unable to compare {} and {}", score1, score2)
-            })
-        });
+        label_score_pairs.sort_unstable_by_key(|&(_, score)| Reverse(NotNan::new(score).unwrap()));
         label_score_pairs
     }
 
@@ -171,11 +169,7 @@ impl Tree {
 
             swap(&mut curr_level, &mut next_level);
             if curr_level.len() > beam_size {
-                curr_level.sort_unstable_by(|(_, score1), (_, score2)| {
-                    score2.partial_cmp(score1).unwrap_or_else(|| {
-                        panic!("Numeric error: unable to compare {} and {}", score1, score2)
-                    })
-                });
+                curr_level.sort_unstable_by_key(|&(_, score)| Reverse(NotNan::new(score).unwrap()));
                 curr_level.truncate(beam_size);
             }
         }

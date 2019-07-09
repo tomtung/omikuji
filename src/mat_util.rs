@@ -2,8 +2,10 @@ use crate::Index;
 use bit_set::BitSet;
 use ndarray::ArrayViewMut1;
 use num_traits::{Float, Num, Unsigned};
+use ordered_float::NotNan;
 use serde::{Deserialize, Serialize};
 use sprs::{CsMatBase, CsMatI, CsVecViewI, SpIndex};
+use std::fmt::Display;
 use std::ops::{AddAssign, Deref, DerefMut, DivAssign};
 
 pub type SparseVec = sprs::CsVecI<f32, Index>;
@@ -285,7 +287,25 @@ where
     N: Float + DivAssign + ndarray::ScalarOperand,
 {
     let length = vec.dot(&vec).sqrt();
-    vec /= length;
+    if length > N::from(1e-5).unwrap() {
+        vec /= length;
+    } else {
+        vec.fill(N::zero());
+    }
+}
+
+pub fn find_max<N>(arr: ndarray::ArrayView1<N>) -> Option<(N, usize)>
+where
+    N: Float + Display,
+{
+    if let Some((i, &v)) = arr
+        .indexed_iter()
+        .max_by_key(|(_, &l)| NotNan::new(l).unwrap())
+    {
+        Some((v, i))
+    } else {
+        None
+    }
 }
 
 #[cfg(test)]
@@ -444,5 +464,15 @@ mod tests {
         let mut v = array![1., 2., 4., 6., 8.];
         dense_vec_l2_normalize(v.view_mut());
         assert_eq!(array![1. / 11., 2. / 11., 4. / 11., 6. / 11., 8. / 11.], v);
+    }
+
+    #[test]
+    fn test_find_max() {
+        assert_eq!(Some((3., 0)), find_max(array![3.].view()));
+        assert_eq!(
+            Some((10., 4)),
+            find_max(array![3., 5., 1., 5., 10., 0.].view())
+        );
+        assert_eq!(None, find_max(DenseVec::zeros(0).view()));
     }
 }

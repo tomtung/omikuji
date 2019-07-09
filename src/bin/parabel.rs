@@ -19,7 +19,6 @@ fn parse_train_hyper_param(matches: &clap::ArgMatches) -> parabel::model::TrainH
     hyper_param.n_trees = value_t!(matches, "n_trees", usize).unwrap();
     hyper_param.min_branch_size = value_t!(matches, "min_branch_size", usize).unwrap();
     hyper_param.max_depth = value_t!(matches, "max_depth", usize).unwrap();
-    hyper_param.cluster_eps = value_t!(matches, "cluster_eps", f32).unwrap();
     hyper_param.centroid_threshold = value_t!(matches, "centroid_threshold", f32).unwrap();
 
     hyper_param.linear.loss_type = match matches.value_of("linear.loss").unwrap() {
@@ -34,6 +33,10 @@ fn parse_train_hyper_param(matches: &clap::ArgMatches) -> parabel::model::TrainH
     hyper_param.linear.max_sparse_density =
         value_t!(matches, "linear.max_sparse_density", f32).unwrap();
     hyper_param.linear.max_iter = value_t!(matches, "linear.max_iter", u32).unwrap();
+
+    hyper_param.cluster.k = value_t!(matches, "cluster.k", usize).unwrap();
+    hyper_param.cluster.balanced = matches.occurrences_of("cluster.unbalanced") == 0;
+    hyper_param.cluster.eps = value_t!(matches, "cluster.eps", f32).unwrap();
 
     hyper_param.validate().unwrap();
     hyper_param

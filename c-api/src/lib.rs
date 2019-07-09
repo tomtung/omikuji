@@ -155,7 +155,6 @@ pub struct HyperParam {
     pub n_trees: size_t,
     pub min_branch_size: size_t,
     pub max_depth: size_t,
-    pub cluster_eps: f32,
     pub centroid_threshold: f32,
     pub linear_loss_type: LossType,
     pub linear_eps: c_float,
@@ -163,6 +162,9 @@ pub struct HyperParam {
     pub linear_weight_threshold: c_float,
     pub linear_max_iter: u32,
     pub linear_max_sparse_density: c_float,
+    pub cluster_k: size_t,
+    pub cluster_balanced: bool,
+    pub cluster_eps: f32,
 }
 
 impl From<parabel::model::TrainHyperParam> for HyperParam {
@@ -171,7 +173,6 @@ impl From<parabel::model::TrainHyperParam> for HyperParam {
             n_trees: hyperparam.n_trees,
             min_branch_size: hyperparam.min_branch_size,
             max_depth: hyperparam.max_depth,
-            cluster_eps: hyperparam.cluster_eps,
             centroid_threshold: hyperparam.centroid_threshold,
             linear_loss_type: match hyperparam.linear.loss_type {
                 parabel::model::liblinear::LossType::Hinge => LossType::Hinge,
@@ -182,6 +183,9 @@ impl From<parabel::model::TrainHyperParam> for HyperParam {
             linear_weight_threshold: hyperparam.linear.weight_threshold,
             linear_max_iter: hyperparam.linear.max_iter,
             linear_max_sparse_density: hyperparam.linear.max_sparse_density,
+            cluster_k: hyperparam.cluster.k,
+            cluster_balanced: hyperparam.cluster.balanced,
+            cluster_eps: hyperparam.cluster.eps,
         }
     }
 }
@@ -194,7 +198,6 @@ impl TryInto<parabel::model::TrainHyperParam> for HyperParam {
         hyper_param.n_trees = self.n_trees;
         hyper_param.min_branch_size = self.min_branch_size;
         hyper_param.max_depth = self.max_depth;
-        hyper_param.cluster_eps = self.cluster_eps;
         hyper_param.centroid_threshold = self.centroid_threshold;
         hyper_param.linear.loss_type = match self.linear_loss_type {
             LossType::Hinge => parabel::model::liblinear::LossType::Hinge,
@@ -206,6 +209,10 @@ impl TryInto<parabel::model::TrainHyperParam> for HyperParam {
         hyper_param.linear.weight_threshold = self.linear_weight_threshold;
         hyper_param.linear.max_iter = self.linear_max_iter;
         hyper_param.linear.max_sparse_density = self.linear_max_sparse_density;
+
+        hyper_param.cluster.k = self.cluster_k;
+        hyper_param.cluster.balanced = self.cluster_balanced;
+        hyper_param.cluster.eps = self.cluster_eps;
 
         if let Err(msg) = hyper_param.validate() {
             Err(msg)

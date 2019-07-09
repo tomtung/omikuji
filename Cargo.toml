@@ -14,6 +14,7 @@ log = "0.4"
 ndarray = { version = "0.12", features = ["serde-1"] }
 num-traits = "0.2"
 order-stat = "0.1"
+ordered-float = "1.0"
 pbr = "1.0"
 rand = "0.7"
 rayon = "1.1"

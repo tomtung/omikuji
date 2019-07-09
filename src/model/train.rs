@@ -17,9 +17,9 @@ pub struct HyperParam {
     pub n_trees: usize,
     pub min_branch_size: usize,
     pub max_depth: usize,
-    pub cluster_eps: f32,
     pub centroid_threshold: f32,
     pub linear: liblinear::HyperParam,
+    pub cluster: cluster::HyperParam,
 }
 
 impl Default for HyperParam {
@@ -28,9 +28,9 @@ impl Default for HyperParam {
             n_trees: 3,
             min_branch_size: 100,
             max_depth: 20,
-            cluster_eps: 0.0001,
             centroid_threshold: 0.,
             linear: liblinear::HyperParam::default(),
+            cluster: cluster::HyperParam::default(),
         }
     }
 }
@@ -45,11 +45,6 @@ impl HyperParam {
                 "min_branch_size must be greater than 1, but is {}",
                 self.min_branch_size
             ))
-        } else if self.cluster_eps <= 0. {
-            Err(format!(
-                "cluster_eps must be positive, but is {}",
-                self.cluster_eps
-            ))
         } else if self.centroid_threshold < 0. {
             Err(format!(
                 "centroid_threshold must be non-negative, but is {}",
@@ -57,6 +52,8 @@ impl HyperParam {
             ))
         } else if let Err(msg) = self.linear.validate() {
             Err(format!("Invalid liblinear hyper-parameter; {}", msg))
+        } else if let Err(msg) = self.cluster.validate() {
+            Err(format!("Invalid clustering hyper-parameter; {}", msg))
         } else {
             Ok(())
         }
@@ -156,46 +153,54 @@ impl<'a> TreeTrainer<'a> {
         examples: Arc<TrainingExamples>,
         label_cluster: Arc<LabelCluster>,
     ) -> TreeNode {
-        if depth >= self.hyper_param.max_depth
-            || label_cluster.len() < self.hyper_param.min_branch_size
+        // If we haven't reached depth limit, have enough labels for further branching,
+        // and also successfully performed clustering, then recursively branch and train subtrees
+        if depth < self.hyper_param.max_depth
+            && label_cluster.len() >= self.hyper_param.min_branch_size
         {
-            self.train_leaf_node(examples, &label_cluster.labels)
-        } else {
-            // Otherwise, branch and train subtrees recursively
-            let label_clusters = label_cluster.split(self.hyper_param.cluster_eps);
+            if let Some(label_clusters) = label_cluster.split(self.hyper_param.cluster) {
+                assert!(label_clusters.len() > 1);
+                self.progress_bar
+                    .lock()
+                    .expect("Failed to lock progress bar")
+                    .total += label_clusters.len() as u64;
 
-            let n_clusters = label_clusters.len();
-            debug_assert_eq!(2, n_clusters);
-            self.progress_bar
-                .lock()
-                .expect("Failed to lock progress bar")
-                .total += n_clusters as u64;
+                drop(label_cluster); // No longer needed
 
-            drop(label_cluster); // No longer needed
+                let example_index_lists = label_clusters
+                    .par_iter()
+                    .map(|cluster| examples.find_examples_with_labels(&cluster.labels))
+                    .collect::<Vec<_>>();
 
-            let example_index_lists = label_clusters
-                .par_iter()
-                .map(|cluster| examples.find_examples_with_labels(&cluster.labels))
-                .collect::<Vec<_>>();
+                let (children, classifier) = rayon::join(
+                    {
+                        let examples = examples.clone();
+                        || {
+                            self.train_child_nodes(
+                                depth,
+                                examples,
+                                label_clusters,
+                                &example_index_lists,
+                            )
+                        }
+                    },
+                    || {
+                        self.train_classifier(
+                            examples, // NB: the Arc "examples" is moved into this closure
+                            &example_index_lists,
+                        )
+                    },
+                );
 
-            let (children, classifier) = rayon::join(
-                {
-                    let examples = examples.clone();
-                    || self.train_child_nodes(depth, examples, label_clusters, &example_index_lists)
-                },
-                || {
-                    self.train_classifier(
-                        examples, // NB: the Arc "examples" is moved into this closure
-                        &example_index_lists,
-                    )
-                },
-            );
-
-            TreeNode::BranchNode {
-                classifier,
-                children,
+                return TreeNode::BranchNode {
+                    classifier,
+                    children,
+                };
             }
         }
+
+        // Otherwise stop branching and train a leaf node
+        self.train_leaf_node(examples, &label_cluster.labels)
     }
 
     fn train_child_nodes(
@@ -409,11 +414,18 @@ impl LabelCluster {
         self.feature_matrix.rows()
     }
 
-    fn split(&self, cluster_eps: f32) -> Vec<Self> {
-        cluster::balanced_2means(&self.feature_matrix.view(), cluster_eps)
-            .iter()
-            .map(|labels| self.take_labels_by_indices(labels))
-            .collect_vec()
+    fn split(&self, hyper_param: cluster::HyperParam) -> Option<Vec<Self>> {
+        let clusters = hyper_param.train(&self.feature_matrix.view());
+        if clusters.len() > 1 {
+            Some(
+                clusters
+                    .iter()
+                    .map(|labels| self.take_labels_by_indices(labels))
+                    .collect_vec(),
+            )
+        } else {
+            None
+        }
     }
 }
 
