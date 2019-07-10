@@ -50,6 +50,11 @@ impl HyperParam {
                 "centroid_threshold must be non-negative, but is {}",
                 self.centroid_threshold
             ))
+        } else if self.max_depth == 0 {
+            Err(format!(
+                "max_depth must be positive, but is {}",
+                self.max_depth
+            ))
         } else if let Err(msg) = self.linear.validate() {
             Err(format!("Invalid liblinear hyper-parameter; {}", msg))
         } else if let Err(msg) = self.cluster.validate() {
@@ -143,7 +148,7 @@ impl<'a> TreeTrainer<'a> {
 
     fn train(&self) -> Tree {
         Tree {
-            root: self.train_subtree(0, self.all_examples.clone(), self.all_labels.clone()),
+            root: self.train_subtree(1, self.all_examples.clone(), self.all_labels.clone()),
         }
     }
 
