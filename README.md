@@ -70,7 +70,6 @@ label_score_pairs =  model.predict(feature_value_pairs)
 ## Usage
 ```
 $ parabel train --help
-
 parabel-train
 Train a new Parabel model
 
@@ -83,45 +82,37 @@ FLAGS:
     -V, --version               Prints version information
 
 OPTIONS:
-        --centroid_threshold <centroid_threshold>
-            Threshold for pruning label centroid vectors [default: 0.0]
-
-        --cluster.eps <cluster.eps>
-            Epsilon value for determining clustering convergence [default: 0.0001]
-
-        --cluster.k <cluster.k>                                    Number of clusters [default: 2]
-        --cluster.min_size <cluster.min_size>
-            Clusters with sizes smaller than this threshold are merged into other clusters [default: 2]
-
-        --linear.c <linear.c>
-            Cost co-efficient for regularizing linear classifiers [default: 1.0]
-
-        --linear.eps <linear.eps>
+        --centroid_threshold <THRESHOLD>         Threshold for pruning label centroid vectors [default: 0]
+        --cluster.eps <EPS>                      Epsilon value for determining clustering convergence [default: 0.0001]
+        --cluster.k <K>                          Number of clusters [default: 2]
+        --cluster.min_size <SIZE>
+            Labels in clusters with sizes smaller than this threshold are reassigned to other clusters instead [default:
+            2]
+        --linear.c <C>                           Cost co-efficient for regularizing linear classifiers [default: 1]
+        --linear.eps <EPS>
             Epsilon value for determining linear classifier convergence [default: 0.1]
 
-        --linear.loss <linear.loss>
+        --linear.loss <LOSS>
             Loss function used by linear classifiers [default: hinge]  [possible values: hinge, log]
 
-        --linear.max_iter <linear.max_iter>
+        --linear.max_iter <M>
             Max number of iterations for training each linear classifier [default: 20]
 
-        --linear.max_sparse_density <linear.max_sparse_density>
+        --linear.max_sparse_density <DENSITY>
             Density threshold above which weight vectors are stored in dense format. Lower values results in larger
             model but faster prediction [default: 0.15]
-        --linear.weight_threshold <linear.weight_threshold>
+        --linear.weight_threshold <THRESHOLD>
             Threshold for pruning weight vectors of linear classifiers [default: 0.1]
 
-        --max_depth <max_depth>                                    Maximum tree depth [default: 20]
-        --min_branch_size <min_branch_size>
+        --max_depth <DEPTH>                      Maximum tree depth [default: 20]
+        --min_branch_size <SIZE>
             Number of labels below which no futher clustering & branching is done [default: 100]
 
-        --model_path <PATH>
-            Path to which the trained model will be saved if provided
-
-        --n_threads <n_threads>
+        --model_path <PATH>                      Path to which the trained model will be saved if provided
+        --n_threads <T>
             Number of worker threads. If 0, the number is selected automatically [default: 0]
 
-        --n_trees <n_trees>                                        Number of trees [default: 3]
+        --n_trees <N>                            Number of trees [default: 3]
 
 ARGS:
     <training_data>    Path to training dataset file (in the format of the Extreme Classification Repository)
@@ -129,7 +120,6 @@ ARGS:
 
 ```
 $ parabel test --help
-
 parabel-test
 Test an existing Parabel model
 
@@ -142,8 +132,8 @@ FLAGS:
 
 OPTIONS:
         --beam_size <beam_size>    Beam size for beam search [default: 10]
-        --k_top <k_top>            Number of top predictions to write out for each test example [default: 5]
-        --n_threads <n_threads>    Number of worker threads. If 0, the number is selected automatically [default: 0]
+        --k_top <K>                Number of top predictions to write out for each test example [default: 5]
+        --n_threads <T>            Number of worker threads. If 0, the number is selected automatically [default: 0]
         --out_path <PATH>          Path to the which predictions will be written, if provided
 
 ARGS:

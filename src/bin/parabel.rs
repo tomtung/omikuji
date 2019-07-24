@@ -2,7 +2,7 @@ extern crate clap;
 extern crate parabel;
 extern crate rayon;
 
-use clap::{load_yaml, value_t};
+use clap::value_t;
 use std::fs::File;
 use std::io::{BufReader, BufWriter, Write};
 
@@ -99,8 +99,210 @@ fn test(matches: &clap::ArgMatches) {
 fn main() {
     simple_logger::init().unwrap();
 
-    let yaml = load_yaml!("cli.yml");
-    let arg_matches = clap::App::from_yaml(yaml).get_matches();
+    let default_hyperparam = parabel::model::train::HyperParam::default();
+    let default_n_trees = default_hyperparam.n_trees.to_string();
+    let default_min_branch_size = default_hyperparam.min_branch_size.to_string();
+    let default_max_depth = default_hyperparam.max_depth.to_string();
+    let default_centroid_threshold = default_hyperparam.centroid_threshold.to_string();
+    let default_linear_eps = default_hyperparam.linear.eps.to_string();
+    let default_linear_c = default_hyperparam.linear.c.to_string();
+    let default_linear_weight_threshold = default_hyperparam.linear.weight_threshold.to_string();
+    let default_linear_max_sparse_density =
+        default_hyperparam.linear.max_sparse_density.to_string();
+    let default_linear_max_iter = default_hyperparam.linear.max_iter.to_string();
+    let default_cluster_k = default_hyperparam.cluster.k.to_string();
+    let default_cluster_eps = default_hyperparam.cluster.eps.to_string();
+    let default_cluster_min_size = default_hyperparam.cluster.min_size.to_string();
+
+    let arg_matches = clap::App::new("parabel")
+        .about("Parabel: Partitioned Label Trees for Extreme Classification")
+        .subcommand(
+            clap::SubCommand::with_name("train")
+                .about("Train a new Parabel model")
+                .arg(
+                    clap::Arg::with_name("training_data")
+                        .index(1)
+                        .help("Path to training dataset file (in the format of the Extreme Classification Repository)")
+                        .required(true)
+                )
+                .arg(
+                    clap::Arg::with_name("model_path")
+                        .long("model_path")
+                        .help("Path to which the trained model will be saved if provided")
+                        .takes_value(true)
+                        .value_name("PATH")
+                )
+                .arg(
+                    clap::Arg::with_name("n_threads")
+                        .long("n_threads")
+                        .help("Number of worker threads. If 0, the number is selected automatically")
+                        .takes_value(true)
+                        .value_name("T")
+                        .default_value("0")
+                )
+                .arg(
+                    clap::Arg::with_name("n_trees")
+                        .long("n_trees")
+                        .help("Number of trees")
+                        .takes_value(true)
+                        .value_name("N")
+                        .default_value(&default_n_trees)
+                )
+                .arg(
+                    clap::Arg::with_name("min_branch_size")
+                        .long("min_branch_size")
+                        .help("Number of labels below which no futher clustering & branching is done")
+                        .takes_value(true)
+                        .value_name("SIZE")
+                        .default_value(&default_min_branch_size)
+                )
+                .arg(
+                    clap::Arg::with_name("max_depth")
+                        .long("max_depth")
+                        .help("Maximum tree depth")
+                        .takes_value(true)
+                        .value_name("DEPTH")
+                        .default_value(&default_max_depth)
+                )
+                .arg(
+                    clap::Arg::with_name("centroid_threshold")
+                        .long("centroid_threshold")
+                        .help("Threshold for pruning label centroid vectors")
+                        .takes_value(true)
+                        .value_name("THRESHOLD")
+                        .default_value(&default_centroid_threshold)
+                )
+                .arg(
+                    clap::Arg::with_name("linear.loss")
+                        .long("linear.loss")
+                        .help("Loss function used by linear classifiers")
+                        .takes_value(true)
+                        .value_name("LOSS")
+                        .default_value(match default_hyperparam.linear.loss_type {
+                            parabel::model::liblinear::LossType::Hinge => "hinge",
+                            parabel::model::liblinear::LossType::Log => "log",
+                        })
+                        .possible_values(&["hinge", "log"])
+                )
+                .arg(
+                    clap::Arg::with_name("linear.eps")
+                        .long("linear.eps")
+                        .help("Epsilon value for determining linear classifier convergence")
+                        .takes_value(true)
+                        .value_name("EPS")
+                        .default_value(& default_linear_eps)
+                )
+                .arg(
+                    clap::Arg::with_name("linear.c")
+                        .long("linear.c")
+                        .help("Cost co-efficient for regularizing linear classifiers")
+                        .takes_value(true)
+                        .value_name("C")
+                        .default_value(&default_linear_c)
+                )
+                .arg(
+                    clap::Arg::with_name("linear.weight_threshold")
+                        .long("linear.weight_threshold")
+                        .help("Threshold for pruning weight vectors of linear classifiers")
+                        .takes_value(true)
+                        .value_name("THRESHOLD")
+                        .default_value(&default_linear_weight_threshold)
+                )
+                .arg(
+                    clap::Arg::with_name("linear.max_sparse_density")
+                        .long("linear.max_sparse_density")
+                        .help("Density threshold above which weight vectors are stored in dense format. Lower values results in larger model but faster prediction")
+                        .takes_value(true)
+                        .value_name("DENSITY")
+                        .default_value(&default_linear_max_sparse_density)
+                )
+                .arg(
+                    clap::Arg::with_name("linear.max_iter")
+                        .long("linear.max_iter")
+                        .help("Max number of iterations for training each linear classifier")
+                        .takes_value(true)
+                        .value_name("M")
+                        .default_value(&default_linear_max_iter)
+                )
+                .arg(
+                    clap::Arg::with_name("cluster.k")
+                        .long("cluster.k")
+                        .help("Number of clusters")
+                        .takes_value(true)
+                        .value_name("K")
+                        .default_value(&default_cluster_k)
+                )
+                .arg(
+                    clap::Arg::with_name("cluster.unbalanced")
+                        .long("cluster.unbalanced")
+                        .help("Perform regular k-means clustering instead of balanced k-means clustering")
+                        .takes_value(false)
+                )
+                .arg(
+                    clap::Arg::with_name("cluster.eps")
+                        .long("cluster.eps")
+                        .help("Epsilon value for determining clustering convergence")
+                        .takes_value(true)
+                        .value_name("EPS")
+                        .default_value(&default_cluster_eps)
+                )
+                .arg(
+                    clap::Arg::with_name("cluster.min_size")
+                        .long("cluster.min_size")
+                        .help("Labels in clusters with sizes smaller than this threshold are reassigned to other clusters instead")
+                        .takes_value(true)
+                        .value_name("SIZE")
+                        .default_value(&default_cluster_min_size)
+                )
+            )
+        .subcommand(
+            clap::SubCommand::with_name("test")
+                .about("Test an existing Parabel model")
+                .arg(
+                    clap::Arg::with_name("model_path")
+                        .index(1)
+                        .help("Path to the trained model")
+                        .required(true)
+                )
+                .arg(
+                    clap::Arg::with_name("test_data")
+                        .index(2)
+                        .help("Path to test dataset file (in the format of the Extreme Classification Repository)")
+                        .required(true)
+                )
+                .arg(
+                    clap::Arg::with_name("n_threads")
+                        .long("n_threads")
+                        .help("Number of worker threads. If 0, the number is selected automatically")
+                        .takes_value(true)
+                        .value_name("T")
+                        .default_value("0")
+                )
+                .arg(
+                    clap::Arg::with_name("beam_size")
+                        .long("beam_size")
+                        .help("Beam size for beam search")
+                        .takes_value(true)
+                        .default_value("10")
+                )
+                .arg(
+                    clap::Arg::with_name("out_path")
+                        .long("out_path")
+                        .help("Path to the which predictions will be written, if provided")
+                        .takes_value(true)
+                        .value_name("PATH")
+                )
+                .arg(
+                    clap::Arg::with_name("k_top")
+                        .long("k_top")
+                        .help("Number of top predictions to write out for each test example")
+                        .takes_value(true)
+                        .value_name("K")
+                        .default_value("5")
+                        .requires("out_path")
+                )
+            )
+        .get_matches();
 
     if let Some(arg_matches) = arg_matches.subcommand_matches("train") {
         train(&arg_matches);
