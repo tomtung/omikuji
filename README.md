@@ -1,23 +1,29 @@
 # Parabel-rs
 
-A highly parallelized 🦀Rust implementation of Parabel (Prabhu et al., 2018), a machine learning algorithm for solving extreme classification problems (i.e. multi-label classification problems with extremely large label sets).
+A highly parallelized 🦀Rust implementation of Partioned Label Trees (Prabhu et al., 2018 & Khandagale et al., 2019) for extreme multi-label classification.
 
 ## Performance
 
-This Rust implementation has been tested on datasets from the [Extreme Classification Repository](http://manikvarma.org/downloads/XC/XMLRepository.html), and compared against the [C++ implementation](http://manikvarma.org/code/Parabel/download.html) from the paper authors. We measured training time, and calculated precisions at 1, 3, and 5. The results are summarized in the table below.
+This Rust implementation has been tested on datasets from the [Extreme Classification Repository](http://manikvarma.org/downloads/XC/XMLRepository.html), and compared against the [original Parabel C++ implementation](http://manikvarma.org/code/Parabel/download.html) as well as the [original Bonsai C++ implementation](https://github.com/xmc-aalto/bonsai). We measured training time, and calculated precisions at 1, 3, and 5. The tests were run on a quad-core Intel® Core™ i7-6700 CPU. For both implementations, we used the default hyper-parameter settings, and allowed each implementation to utilize as many CPU cores as possible. The results are summarized in the table below.
 
-|     Dataset    | Implementation | Training Time |  P@1  |  P@3  |  P@5  |
-| -------------- | -------------- | ------------- | ----- | ----- | ----- |
-|    EURLex-4K   |      Rust      |      16.6s    | 81.73 | 69.12 | 57.72 |
-|                |      C++       |      22.9s    | 82.25 | 68.70 | 57.53 |
-|   Amazon-670K  |      Rust      |     315.1s    | 44.99 | 39.90 | 36.04 |
-|                |      C++       |     484.0s    | 44.91 | 39.77 | 35.98 |
-| WikiLSHTC-325K |      Rust      |     733.5s    | 65.02 | 43.16 | 32.08 |
-|                |      C++       |    1079.0s    | 65.05 | 43.23 | 32.05 |
+| Dataset         	| Metric     	| Parabel 	| Parabel-rs<br/>(balanced,<br/>cluster.k=2) 	| Bonsai  	| Parabel-rs<br/>(unbalanced,<br/>cluster.k=100,<br/>max\_depth=3) 	|
+|-----------------	|------------	|---------	|-------------------------------------------	|---------	|-----------------------------------------------------------------	|
+|  EURLex-4K      	| P@1        	| 82.2    	| 81.9                                      	| 82.8    	| 83.0                                                            	|
+|                 	| P@3        	| 68.8    	| 68.8                                      	| 69.4    	| 69.5                                                            	|
+|                 	| P@5        	| 57.6    	| 57.4                                      	| 58.1    	| 58.3                                                            	|
+|                 	| Train Time 	| 18s     	| 14s                                       	| 87s     	| 19s                                                             	|
+| Amazon-670K     	| P@1        	| 44.9    	| 44.8                                      	| 45.5*   	| 45.6                                                            	|
+|                 	| P@3        	| 39.8    	| 39.8                                      	| 40.3*   	| 40.4                                                            	|
+|                 	| P@5        	| 36.0    	| 36.0                                      	| 36.5*   	| 36.6                                                            	|
+|                 	| Train Time 	| 404s    	| 234s                                      	| 5,759s  	| 1,753s                                                          	|
+|  WikiLSHTC-325K 	| P@1        	| 65.0    	| 64.8                                      	| 66.6*   	| 66.6                                                            	|
+|                 	| P@3        	| 43.2    	| 43.1                                      	| 44.5*   	| 44.4                                                            	|
+|                 	| P@5        	| 32.0    	| 32.1                                      	| 33.0*   	| 33.0                                                            	|
+|                 	| Train Time 	| 959s    	| 659s                                      	| 11,156s 	| 4,259s                                                          	|
 
-The tests were run on a quad-core Intel® Core™ i7-6700 CPU. For both implementations, we used the default hyper-parameter settings, and tried to utilize as many CPU cores as possible.
+*\*Precision numbers as reported in the paper; our machine doesn't have enough memory to run the full prediction with their implementation.*
 
-Note that since the C++ implementation trains each tree single-threaded, the number of CPU cores it can utilize is limited to the number of trees (3 by default). In contrast, our Rust implementation is able to utilize **all available CPU cores** whenever possible. On our quad-core machine, this resulted in a **1.3x to 1.5x speed up**; further speed-up is possible with more CPU cores available.
+Note that since the C++ implementations train each tree single-threadedly, the number of CPU cores they can utilize is limited to the number of trees (3 by default). In contrast, our Rust implementation is able to utilize **all available CPU cores** whenever possible. On our quad-core machine, this resulted in a 1.3x to 1.7x speed up from Parabel, and a 2.6x to 4.6x speed up from Bonsai; **further speed-up is possible if more CPU cores are available**.
 
 ## Build & Install
 Parabel-rs can be easily built & installed with [Cargo](https://doc.rust-lang.org/cargo/getting-started/installation.html) as a CLI app:
@@ -152,4 +158,5 @@ label1,label2,...labelk ft1:ft1_val ft2:ft2_val ft3:ft3_val .. ftd:ftd_val
 Parabel-rs is licensed under the MIT License.
 
 ## References
-- Y. Prabhu, A. Kag, S. Harsola, R. Agrawal and M. Varma. Parabel: Partitioned label trees for extreme classification with application to dynamic search advertising. In Proceedings of the International World Wide Web Conference, Lyon, France, April 2018. doi>[10.1145/3178876.3185998](https://doi.org/10.1145/3178876.3185998)
+- Y. Prabhu, A. Kag, S. Harsola, R. Agrawal, and M. Varma, “Parabel: Partitioned Label Trees for Extreme Classification with Application to Dynamic Search Advertising,” in Proceedings of the 2018 World Wide Web Conference, 2018, pp. 993–1002. doi>[10.1145/3178876.3185998](https://doi.org/10.1145/3178876.3185998)
+- S. Khandagale, H. Xiao, and R. Babbar, “Bonsai - Diverse and Shallow Trees for Extreme Multi-label Classification,” CoRR, vol. [abs/1904.08249](http://arxiv.org/abs/1904.08249), 2019.
