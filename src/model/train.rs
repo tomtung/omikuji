@@ -68,14 +68,15 @@ impl HyperParam {
     ///
     /// Here we take ownership of the dataset object to perform necessary prepossessing. One can
     /// choose to clone a dataset before passing it in to avoid losing the original data.
-    pub fn train(&self, mut dataset: DataSet) -> Model {
+    pub fn train(&self, dataset: DataSet) -> Model {
         self.validate().unwrap();
+        let n_features = dataset.n_features;
 
         info!("Training Parabel model with hyper-parameters {:?}", self);
         let start_t = time::precise_time_s();
 
         info!("Initializing tree trainer");
-        let trainer = TreeTrainer::initialize(&mut dataset, *self);
+        let trainer = TreeTrainer::initialize(dataset, *self);
 
         info!("Start training forest");
         let trees: Vec<_> = (0..self.n_trees)
@@ -87,25 +88,22 @@ impl HyperParam {
             "Parabel model training complete; it took {:.2}s",
             time::precise_time_s() - start_t
         );
-        Model {
-            trees,
-            n_features: dataset.n_features,
-        }
+        Model { trees, n_features }
     }
 }
 
-struct TreeTrainer<'a> {
-    all_examples: Arc<TrainingExamples<'a>>,
+struct TreeTrainer {
+    all_examples: Arc<TrainingExamples>,
     all_labels: Arc<LabelCluster>,
     hyper_param: HyperParam,
     progress_bar: Mutex<ProgressBar>,
 }
 
-impl<'a> TreeTrainer<'a> {
+impl TreeTrainer {
     /// Initialize a reusable tree trainer with the dataset and hyper-parameters.
     ///
     /// Dataset is assumed to be well-formed.
-    fn initialize(dataset: &'a mut DataSet, hyper_param: HyperParam) -> Self {
+    fn initialize(mut dataset: DataSet, hyper_param: HyperParam) -> Self {
         assert_eq!(dataset.feature_lists.len(), dataset.label_sets.len());
         // l2-normalize all examples in the dataset
         dataset
@@ -114,16 +112,10 @@ impl<'a> TreeTrainer<'a> {
             .for_each(|v| v.l2_normalize());
         // Initialize label clusters
         let all_labels = Arc::new(LabelCluster::new_from_dataset(
-            dataset,
+            &dataset,
             hyper_param.centroid_threshold,
         ));
 
-        // Append bias term to each vector to make training linear classifiers easier
-        let bias_index = dataset.n_features as Index;
-        dataset
-            .feature_lists
-            .iter_mut()
-            .for_each(|v| v.push((bias_index, 1.)));
         // Initialize examples set
         let all_examples = Arc::new(TrainingExamples::new_from_dataset(dataset));
 
@@ -269,18 +261,18 @@ impl<'a> TreeTrainer<'a> {
 }
 
 /// Internal representation of training examples for training a subtree.
-struct TrainingExamples<'a> {
+struct TrainingExamples {
     feature_matrix: SparseMat,
     index_to_feature: Vec<Index>,
-    label_sets: Vec<&'a IndexSet>,
+    label_sets: Vec<Arc<IndexSet>>,
 }
 
-impl<'a> TrainingExamples<'a> {
+impl TrainingExamples {
     #[inline]
     fn new(
         feature_matrix: SparseMat,
         index_to_feature: Vec<Index>,
-        label_sets: Vec<&'a IndexSet>,
+        label_sets: Vec<Arc<IndexSet>>,
     ) -> Self {
         assert_eq!(feature_matrix.rows(), label_sets.len());
         assert!(!label_sets.is_empty());
@@ -292,10 +284,26 @@ impl<'a> TrainingExamples<'a> {
         }
     }
 
-    fn new_from_dataset(dataset: &'a DataSet) -> Self {
-        let feature_matrix = dataset.feature_lists.copy_to_csrmat(dataset.n_features + 1); // + 1 because we added bias term
+    fn new_from_dataset(dataset: DataSet) -> Self {
+        let DataSet {
+            n_features,
+            n_labels: _,
+            mut feature_lists,
+            label_sets,
+        } = dataset;
+
+        // Append bias term to each vector to make training linear classifiers easier
+        let bias_index = n_features as Index;
+        feature_lists
+            .iter_mut()
+            .for_each(|v| v.push((bias_index, 1.)));
+
+        let feature_matrix = csrmat_from_index_value_pair_lists(
+            feature_lists,
+            n_features + 1, // + 1 because we added bias term
+        );
         let index_to_feature = (0..feature_matrix.cols() as Index).collect_vec();
-        let label_sets = dataset.label_sets.iter().collect_vec();
+        let label_sets = label_sets.into_iter().map(Arc::new).collect_vec();
 
         Self::new(feature_matrix, index_to_feature, label_sets)
     }
@@ -348,7 +356,10 @@ impl<'a> TrainingExamples<'a> {
             *index = self.index_to_feature[*index as usize];
         }
 
-        let new_label_sets = indices.iter().map(|&i| self.label_sets[i]).collect_vec();
+        let new_label_sets = indices
+            .iter()
+            .map(|&i| self.label_sets[i].clone())
+            .collect_vec();
         Self::new(new_feature_matrix, new_index_to_feature, new_label_sets)
     }
 }
@@ -371,7 +382,9 @@ impl LabelCluster {
 
     fn new_from_dataset(dataset: &DataSet, centroid_threshold: f32) -> Self {
         let (labels, label_centroids) = Self::compute_label_centroids(&dataset, centroid_threshold);
-        Self::new(labels, label_centroids.copy_to_csrmat(dataset.n_features))
+        let label_centroids =
+            csrmat_from_index_value_pair_lists(label_centroids, dataset.n_features);
+        Self::new(labels, label_centroids)
     }
 
     /// Compute centroid feature vectors for labels in a given dataset, pruned with the given threshold.

@@ -110,41 +110,30 @@ impl<IndexT, ValueT> OwnedIndexValuePairs<IndexT, ValueT> for Vec<(IndexT, Value
     }
 }
 
-pub trait IndexValuePairLists<IndexT, ValueT, RowT>: Deref<Target = [RowT]>
+pub fn csrmat_from_index_value_pair_lists<IndexT, ValueT>(
+    pair_lists: Vec<Vec<(IndexT, ValueT)>>,
+    n_col: usize,
+) -> sprs::CsMatI<ValueT, IndexT>
 where
-    RowT: Deref<Target = [(IndexT, ValueT)]>,
+    IndexT: SpIndex,
+    ValueT: Copy,
 {
-    /// Copy data to a new sprs CSR matrix object.
-    ///
-    /// This assumes that is_valid_sparse_vec would return true for each row.
-    fn copy_to_csrmat(&self, n_col: usize) -> sprs::CsMatI<ValueT, IndexT>
-    where
-        IndexT: SpIndex,
-        ValueT: Copy,
-    {
-        let mut indptr: Vec<IndexT> = Vec::with_capacity(self.len() + 1);
-        let mut indices: Vec<IndexT> = Vec::new();
-        let mut data: Vec<ValueT> = Vec::new();
+    let n_row = pair_lists.len();
+    let mut indptr: Vec<IndexT> = Vec::with_capacity(n_row + 1);
+    let mut indices: Vec<IndexT> = Vec::new();
+    let mut data: Vec<ValueT> = Vec::new();
 
-        indptr.push(IndexT::zero());
-        for row in self.iter() {
-            for &(i, v) in row.iter() {
-                assert!(i.index() < n_col);
-                indices.push(i);
-                data.push(v);
-            }
-            indptr.push(IndexT::from_usize(indices.len()));
+    indptr.push(IndexT::zero());
+    for row in pair_lists.into_iter() {
+        for (i, v) in row.into_iter() {
+            assert!(i.index() < n_col);
+            indices.push(i);
+            data.push(v);
         }
-
-        sprs::CsMatI::new((self.len(), n_col), indptr, indices, data)
+        indptr.push(IndexT::from_usize(indices.len()));
     }
-}
 
-impl<IndexT, ValueT, RowT, T> IndexValuePairLists<IndexT, ValueT, RowT> for T
-where
-    T: Deref<Target = [RowT]>,
-    RowT: Deref<Target = [(IndexT, ValueT)]>,
-{
+    sprs::CsMatI::new((n_row, n_col), indptr, indices, data)
 }
 
 pub trait CsMatBaseTools<DataT, IndexT: SpIndex>: sprs::SparseMat {
@@ -365,7 +354,7 @@ mod tests {
     }
 
     #[test]
-    fn test_copy_to_csrmat() {
+    fn test_csrmat_from_index_value_pair_lists() {
         let mat = vec![
             vec![(0usize, 1), (1, 2)],
             vec![(0, 3), (2, 4)],
@@ -378,7 +367,7 @@ mod tests {
                 vec![0, 1, 0, 2, 2],
                 vec![1, 2, 3, 4, 5],
             ),
-            mat.copy_to_csrmat(5)
+            csrmat_from_index_value_pair_lists(mat, 5)
         );
     }
 
