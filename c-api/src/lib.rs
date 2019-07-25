@@ -117,13 +117,23 @@ pub unsafe extern "C" fn parabel_predict(
 
 /// Load a data file from the Extreme Classification Repository.
 #[no_mangle]
-pub unsafe extern "C" fn load_parabel_data_set(path: *const c_char) -> *mut DataSet {
+pub unsafe extern "C" fn load_parabel_data_set(
+    path: *const c_char,
+    n_threads: usize,
+) -> *mut DataSet {
     assert!(!path.is_null(), "Path should not be null");
     match CStr::from_ptr(path)
         .to_str()
         .map_err(|_| "Failed to parse path")
         .and_then(|path| {
-            parabel::DataSet::load_xc_repo_data_file(path).map_err(|_| "Failed to laod data file")
+            rayon::ThreadPoolBuilder::new()
+                .num_threads(n_threads)
+                .build()
+                .unwrap()
+                .install(|| {
+                    parabel::DataSet::load_xc_repo_data_file(path)
+                        .map_err(|_| "Failed to laod data file")
+                })
         }) {
         Ok(dataset) => Box::into_raw(Box::new(dataset)) as *mut DataSet,
         Err(msg) => {
@@ -236,14 +246,23 @@ pub extern "C" fn parabel_default_hyper_param() -> HyperParam {
 pub unsafe extern "C" fn train_parabel_model(
     dataset_ptr: *const DataSet,
     hyper_param: HyperParam,
+    n_threads: usize,
 ) -> *mut Model {
     assert!(!dataset_ptr.is_null(), "Dataset should not be null");
     let result: Result<parabel::model::TrainHyperParam, String> = hyper_param.try_into();
     match result {
         Ok(hyper_param) => {
             let dataset_ptr = dataset_ptr as *const c_void as *const parabel::DataSet;
-            let model = hyper_param.train((*dataset_ptr).clone());
-            Box::into_raw(Box::new(model)) as *mut Model
+            // Clone the dataset so that the pointer remains valid
+            let dataset = (*dataset_ptr).clone();
+
+            let model = rayon::ThreadPoolBuilder::new()
+                .num_threads(n_threads)
+                .build()
+                .unwrap()
+                .install(|| Box::new(hyper_param.train(dataset)));
+
+            Box::into_raw(model) as *mut Model
         }
         Err(msg) => {
             eprintln!("Failed to set hyper-parameters: {}", msg);
@@ -259,21 +278,6 @@ pub extern "C" fn parabel_init_logger() -> i8 {
         Ok(_) => 0,
         Err(_) => {
             eprintln!("Failed to initialize logger");
-            -1
-        }
-    }
-}
-
-/// Optionally initialize Rayon global thread pool with certain number of threads.
-#[no_mangle]
-pub extern "C" fn rayon_init_threads(n_threads: size_t) -> i8 {
-    match rayon::ThreadPoolBuilder::new()
-        .num_threads(n_threads as usize)
-        .build_global()
-    {
-        Ok(_) => 0,
-        Err(_) => {
-            eprintln!("Failed to initialize Rayon global thread-pool");
             -1
         }
     }

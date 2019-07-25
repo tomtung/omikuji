@@ -1,5 +1,5 @@
 __version__ = "0.0.1"
-__all__ = ["Model", "LossType", "init_rayon_threads"]
+__all__ = ["Model", "LossType"]
 
 from ._libparabel import lib, ffi
 from enum import Enum
@@ -82,9 +82,11 @@ class Model(object):
         return lib.parabel_default_hyper_param()
 
     @classmethod
-    def train_on_data(cls, data_path: str, hyper_param=None):
+    def train_on_data(cls, data_path: str, hyper_param=None, n_threads=0):
         """Train a model with the given data and hyper-parameters."""
-        dataset_ptr = lib.load_parabel_data_set(ffi.new("char[]", data_path.encode()))
+        dataset_ptr = lib.load_parabel_data_set(
+            ffi.new("char[]", data_path.encode()), n_threads
+        )
         if dataset_ptr == ffi.NULL:
             raise RuntimeError(f"Failed to load data from {data_path}")
 
@@ -93,7 +95,7 @@ class Model(object):
         if hyper_param is None:
             hyper_param = cls.default_hyper_param()
 
-        model_ptr = lib.train_parabel_model(dataset_ptr, hyper_param)
+        model_ptr = lib.train_parabel_model(dataset_ptr, hyper_param, n_threads)
         if model_ptr == ffi.NULL:
             raise RuntimeError(f"Failed to train model")
 
@@ -107,9 +109,3 @@ def init_logger():
 
 
 ffi.init_once(init_logger, "parabel_init_logger")
-
-
-def init_rayon_threads(n_threads):
-    """Optionally initialize Rayon global thread pool with certain number of threads."""
-    if lib.rayon_init_threads(n_threads) < 0:
-        raise RuntimeWarning("Failed to initialize Rayon thread-pool")
