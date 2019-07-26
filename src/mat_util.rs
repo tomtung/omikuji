@@ -130,7 +130,11 @@ where
             indices.push(i);
             data.push(v);
         }
-        indptr.push(IndexT::from_usize(indices.len()));
+        indptr.push(
+            IndexT::from::<usize>(indices.len()).unwrap_or_else(|| {
+                panic!("Failed to convert usize {} to index type", indices.len())
+            }),
+        );
     }
 
     sprs::CsMatI::new((n_row, n_col), indptr, indices, data)
@@ -165,7 +169,11 @@ where
                 }
             }
 
-            iptr.push(I::from_usize(ind.len()));
+            iptr.push(
+                I::from::<usize>(ind.len()).unwrap_or_else(|| {
+                    panic!("Failed to convert usize {} to index type", ind.len())
+                }),
+            );
         }
 
         CsMatI::new((indices.len(), self.inner_dims()), iptr, ind, data)
@@ -204,7 +212,9 @@ where
         let old_index_to_new = {
             let mut lookup = vec![I::zero(); shape.1];
             for (new_index, &old_index) in new_index_to_old.iter().enumerate() {
-                lookup[old_index.index()] = I::from_usize(new_index);
+                lookup[old_index.index()] = I::from::<usize>(new_index).unwrap_or_else(|| {
+                    panic!("Failed to convert usize {} to index type", new_index)
+                });
             }
             lookup
         };
