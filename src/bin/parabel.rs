@@ -30,8 +30,6 @@ fn parse_train_hyper_param(matches: &clap::ArgMatches) -> parabel::model::TrainH
     hyper_param.linear.c = value_t!(matches, "linear.c", f32).unwrap();
     hyper_param.linear.weight_threshold =
         value_t!(matches, "linear.weight_threshold", f32).unwrap();
-    hyper_param.linear.max_sparse_density =
-        value_t!(matches, "linear.max_sparse_density", f32).unwrap();
     hyper_param.linear.max_iter = value_t!(matches, "linear.max_iter", u32).unwrap();
 
     hyper_param.cluster.k = value_t!(matches, "cluster.k", usize).unwrap();
@@ -67,7 +65,11 @@ fn test(matches: &clap::ArgMatches) {
     let model = {
         let model_path = matches.value_of("model_path").unwrap();
         let model_file = File::open(model_path).expect("Failed to open model file");
-        parabel::Model::load(BufReader::new(model_file)).expect("Failed to load model")
+        let mut model =
+            parabel::Model::load(BufReader::new(model_file)).expect("Failed to load model");
+        let max_sparse_density = value_t!(matches, "max_sparse_density", f32).unwrap();
+        model.densify_weights(max_sparse_density);
+        model
     };
 
     if let Some(test_path) = matches.value_of("test_data") {
@@ -107,8 +109,6 @@ fn main() {
     let default_linear_eps = default_hyperparam.linear.eps.to_string();
     let default_linear_c = default_hyperparam.linear.c.to_string();
     let default_linear_weight_threshold = default_hyperparam.linear.weight_threshold.to_string();
-    let default_linear_max_sparse_density =
-        default_hyperparam.linear.max_sparse_density.to_string();
     let default_linear_max_iter = default_hyperparam.linear.max_iter.to_string();
     let default_cluster_k = default_hyperparam.cluster.k.to_string();
     let default_cluster_eps = default_hyperparam.cluster.eps.to_string();
@@ -124,6 +124,7 @@ fn main() {
                         .index(1)
                         .help("Path to training dataset file (in the format of the Extreme Classification Repository)")
                         .required(true)
+                        .value_name("TRAINING_DATA_PATH")
                 )
                 .arg(
                     clap::Arg::with_name("model_path")
@@ -131,6 +132,7 @@ fn main() {
                         .help("Path to which the trained model will be saved if provided")
                         .takes_value(true)
                         .value_name("PATH")
+                        .required(false)
                 )
                 .arg(
                     clap::Arg::with_name("n_threads")
@@ -209,14 +211,6 @@ fn main() {
                         .default_value(&default_linear_weight_threshold)
                 )
                 .arg(
-                    clap::Arg::with_name("linear.max_sparse_density")
-                        .long("linear.max_sparse_density")
-                        .help("Density threshold above which weight vectors are stored in dense format. Lower values results in larger model but faster prediction")
-                        .takes_value(true)
-                        .value_name("DENSITY")
-                        .default_value(&default_linear_max_sparse_density)
-                )
-                .arg(
                     clap::Arg::with_name("linear.max_iter")
                         .long("linear.max_iter")
                         .help("Max number of iterations for training each linear classifier")
@@ -263,12 +257,14 @@ fn main() {
                         .index(1)
                         .help("Path to the trained model")
                         .required(true)
+                        .value_name("MODEL_PATH")
                 )
                 .arg(
                     clap::Arg::with_name("test_data")
                         .index(2)
                         .help("Path to test dataset file (in the format of the Extreme Classification Repository)")
                         .required(true)
+                        .value_name("TEST_DATA_PATH")
                 )
                 .arg(
                     clap::Arg::with_name("n_threads")
@@ -279,18 +275,19 @@ fn main() {
                         .default_value("0")
                 )
                 .arg(
+                    clap::Arg::with_name("max_sparse_density")
+                        .long("max_sparse_density")
+                        .help("Density threshold above which sparse weight vectors are converted to dense format. Lower values speed up prediction at the cost of more memory usage")
+                        .takes_value(true)
+                        .value_name("DENSITY")
+                        .default_value("0.1")
+                )
+                .arg(
                     clap::Arg::with_name("beam_size")
                         .long("beam_size")
                         .help("Beam size for beam search")
                         .takes_value(true)
                         .default_value("10")
-                )
-                .arg(
-                    clap::Arg::with_name("out_path")
-                        .long("out_path")
-                        .help("Path to the which predictions will be written, if provided")
-                        .takes_value(true)
-                        .value_name("PATH")
                 )
                 .arg(
                     clap::Arg::with_name("k_top")
@@ -299,7 +296,14 @@ fn main() {
                         .takes_value(true)
                         .value_name("K")
                         .default_value("5")
-                        .requires("out_path")
+                )
+                .arg(
+                    clap::Arg::with_name("out_path")
+                        .long("out_path")
+                        .help("Path to the which predictions will be written, if provided")
+                        .takes_value(true)
+                        .value_name("PATH")
+                        .required(false)
                 )
             )
         .get_matches();

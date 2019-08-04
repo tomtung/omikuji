@@ -27,6 +27,33 @@ impl Vector {
             Vector::Sparse(this) => that.dot(this),
         }
     }
+
+    pub fn is_dense(&self) -> bool {
+        match self {
+            Vector::Dense(_) => true,
+            Vector::Sparse(_) => false,
+        }
+    }
+
+    pub fn density(&self) -> f32 {
+        match self {
+            Vector::Dense(_) => 1.,
+            Vector::Sparse(v) => v.nnz() as f32 / v.dim() as f32,
+        }
+    }
+
+    pub fn densify(&mut self) {
+        *self = match self {
+            Vector::Dense(_) => {
+                return; // Already dense, do nothing
+            }
+            Vector::Sparse(sparse_v) => {
+                let mut dense_v = DenseVec::zeros(sparse_v.dim());
+                sparse_v.scatter(dense_v.as_slice_mut().unwrap());
+                Vector::Dense(dense_v)
+            }
+        };
+    }
 }
 
 pub trait IndexValuePairs<IndexT: SpIndex + Unsigned, ValueT: Copy>:

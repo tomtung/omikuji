@@ -80,7 +80,7 @@ parabel-train
 Train a new Parabel model
 
 USAGE:
-    parabel train [FLAGS] [OPTIONS] <training_data>
+    parabel train [FLAGS] [OPTIONS] <TRAINING_DATA_PATH>
 
 FLAGS:
         --cluster.unbalanced    Perform regular k-means clustering instead of balanced k-means clustering
@@ -104,9 +104,6 @@ OPTIONS:
         --linear.max_iter <M>
             Max number of iterations for training each linear classifier [default: 20]
 
-        --linear.max_sparse_density <DENSITY>
-            Density threshold above which weight vectors are stored in dense format. Lower values results in larger
-            model but faster prediction [default: 0.15]
         --linear.weight_threshold <THRESHOLD>
             Threshold for pruning weight vectors of linear classifiers [default: 0.1]
 
@@ -121,7 +118,7 @@ OPTIONS:
         --n_trees <N>                            Number of trees [default: 3]
 
 ARGS:
-    <training_data>    Path to training dataset file (in the format of the Extreme Classification Repository)
+    <TRAINING_DATA_PATH>    Path to training dataset file (in the format of the Extreme Classification Repository)
 ```
 
 ```
@@ -130,21 +127,25 @@ parabel-test
 Test an existing Parabel model
 
 USAGE:
-    parabel test [OPTIONS] <model_path> <test_data>
+    parabel test [OPTIONS] <MODEL_PATH> <TEST_DATA_PATH>
 
 FLAGS:
     -h, --help       Prints help information
     -V, --version    Prints version information
 
 OPTIONS:
-        --beam_size <beam_size>    Beam size for beam search [default: 10]
-        --k_top <K>                Number of top predictions to write out for each test example [default: 5]
-        --n_threads <T>            Number of worker threads. If 0, the number is selected automatically [default: 0]
-        --out_path <PATH>          Path to the which predictions will be written, if provided
+        --beam_size <beam_size>           Beam size for beam search [default: 10]
+        --k_top <K>                       Number of top predictions to write out for each test example [default: 5]
+        --max_sparse_density <DENSITY>    Density threshold above which sparse weight vectors are converted to dense
+                                          format. Lower values speed up prediction at the cost of more memory usage
+                                          [default: 0.1]
+        --n_threads <T>                   Number of worker threads. If 0, the number is selected automatically [default:
+                                          0]
+        --out_path <PATH>                 Path to the which predictions will be written, if provided
 
 ARGS:
-    <model_path>    Path to the trained model
-    <test_data>     Path to test dataset file (in the format of the Extreme Classification Repository)
+    <MODEL_PATH>        Path to the trained model
+    <TEST_DATA_PATH>    Path to test dataset file (in the format of the Extreme Classification Repository)
 ```
 
 ### Data format

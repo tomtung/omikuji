@@ -24,7 +24,6 @@ pub struct HyperParam {
     pub c: f32,
     pub weight_threshold: f32,
     pub max_iter: u32,
-    pub max_sparse_density: f32,
 }
 
 impl Default for HyperParam {
@@ -35,7 +34,6 @@ impl Default for HyperParam {
             c: 1.,
             weight_threshold: 0.1,
             max_iter: 20,
-            max_sparse_density: 0.15,
         }
     }
 }
@@ -56,11 +54,6 @@ impl HyperParam {
             Err(format!(
                 "max_iter must be positive, but is {}",
                 self.max_iter
-            ))
-        } else if self.max_sparse_density < 0. {
-            Err(format!(
-                "max_sparse_density must be non-negative, but is {}",
-                self.max_sparse_density
             ))
         } else {
             Ok(())
@@ -103,7 +96,7 @@ impl HyperParam {
                 }
 
                 // Train the classifier
-                let sparse_w = {
+                let mut w = {
                     let (indices, data) = solver(
                         feature_matrix,
                         &labels,
@@ -122,19 +115,15 @@ impl HyperParam {
                     })
                     .unzip();
 
-                    SparseVec::new(n_features, indices, data)
+                    Vector::Sparse(SparseVec::new(n_features, indices, data))
                 };
 
-                let density = sparse_w.nnz() as f32 / sparse_w.dim() as f32;
-
-                // Store as dense vector if not sparse enough, which greatly speeds up prediction
-                if density <= self.max_sparse_density {
-                    Vector::Sparse(sparse_w)
-                } else {
-                    let mut dense_w = DenseVec::zeros(n_features);
-                    sparse_w.scatter(dense_w.as_slice_mut().unwrap());
-                    Vector::Dense(dense_w)
+                // Only store in sparse format if density is lower than half to save space
+                if w.density() > 0.5 {
+                    w.densify();
                 }
+
+                w
             })
             .collect::<Vec<_>>();
 
@@ -161,6 +150,14 @@ impl MultiLabelClassifier {
             LossType::Hinge => scores.mapv_inplace(|v| -(1. - v).max(0.).powi(2)),
         }
         scores
+    }
+
+    pub fn densify(&mut self, max_sparse_density: f32) {
+        for w in self.weights.iter_mut() {
+            if !w.is_dense() && w.density() > max_sparse_density {
+                w.densify();
+            }
+        }
     }
 }
 

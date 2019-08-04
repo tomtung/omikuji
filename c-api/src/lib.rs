@@ -19,14 +19,22 @@ pub struct DataSet {
 
 /// Load parabel model from file of the given path.
 #[no_mangle]
-pub unsafe extern "C" fn load_parabel_model(path: *const c_char) -> *mut Model {
+pub unsafe extern "C" fn load_parabel_model(
+    path: *const c_char,
+    max_sparse_density: f32,
+) -> *mut Model {
     assert!(!path.is_null(), "Path should not be null");
     let maybe_model = CStr::from_ptr(path)
         .to_str()
         .map_err(|_| "Failed to parse path")
         .and_then(|path| File::open(path).map_err(|_| "Failed to open file"))
         .and_then(|file| {
-            parabel::Model::load(BufReader::new(file)).map_err(|_| "Failed to load model")
+            parabel::Model::load(BufReader::new(file))
+                .map(|mut model| {
+                    model.densify_weights(max_sparse_density);
+                    model
+                })
+                .map_err(|_| "Failed to load model")
         });
 
     match maybe_model {
@@ -171,7 +179,6 @@ pub struct HyperParam {
     pub linear_c: c_float,
     pub linear_weight_threshold: c_float,
     pub linear_max_iter: u32,
-    pub linear_max_sparse_density: c_float,
     pub cluster_k: size_t,
     pub cluster_balanced: bool,
     pub cluster_eps: f32,
@@ -193,7 +200,6 @@ impl From<parabel::model::TrainHyperParam> for HyperParam {
             linear_c: hyperparam.linear.c,
             linear_weight_threshold: hyperparam.linear.weight_threshold,
             linear_max_iter: hyperparam.linear.max_iter,
-            linear_max_sparse_density: hyperparam.linear.max_sparse_density,
             cluster_k: hyperparam.cluster.k,
             cluster_balanced: hyperparam.cluster.balanced,
             cluster_eps: hyperparam.cluster.eps,
@@ -220,7 +226,6 @@ impl TryInto<parabel::model::TrainHyperParam> for HyperParam {
         hyper_param.linear.c = self.linear_c;
         hyper_param.linear.weight_threshold = self.linear_weight_threshold;
         hyper_param.linear.max_iter = self.linear_max_iter;
-        hyper_param.linear.max_sparse_density = self.linear_max_sparse_density;
 
         hyper_param.cluster.k = self.cluster_k;
         hyper_param.cluster.balanced = self.cluster_balanced;

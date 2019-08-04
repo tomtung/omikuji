@@ -109,6 +109,21 @@ impl Model {
         );
         Ok(model)
     }
+
+    /// Densify model weights to speed up prediction at the cost of more memory usage.
+    pub fn densify_weights(&mut self, max_sparse_density: f32) {
+        info!("Densifying model weights...");
+        let start_t = time::precise_time_s();
+
+        self.trees
+            .par_iter_mut()
+            .for_each(|tree| tree.densify_weights(max_sparse_density));
+
+        info!(
+            "Model weights densified; it took {:.2}s",
+            time::precise_time_s() - start_t
+        );
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -134,6 +149,25 @@ impl TreeNode {
             true
         } else {
             false
+        }
+    }
+
+    fn densify_weights(&mut self, max_sparse_density: f32) {
+        match self {
+            TreeNode::BranchNode {
+                ref mut classifier,
+                ref mut children,
+            } => {
+                classifier.densify(max_sparse_density);
+                children
+                    .par_iter_mut()
+                    .for_each(|child| child.densify_weights(max_sparse_density));
+            }
+            TreeNode::LeafNode {
+                ref mut classifier, ..
+            } => {
+                classifier.densify(max_sparse_density);
+            }
         }
     }
 }
@@ -189,5 +223,9 @@ impl Tree {
                 _ => unreachable!(),
             })
             .collect_vec()
+    }
+
+    fn densify_weights(&mut self, max_sparse_density: f32) {
+        self.root.densify_weights(max_sparse_density);
     }
 }

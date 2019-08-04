@@ -19,9 +19,11 @@ class Model(object):
         self._model_ptr = ffi.gc(model_ptr, lib.free_parabel_model)
 
     @classmethod
-    def load(cls, path: str):
+    def load(cls, path: str, max_sparse_density: float = 0.1):
         """Load parabel model from file of the given path."""
-        model_ptr = lib.load_parabel_model(ffi.new("char[]", path.encode()))
+        model_ptr = lib.load_parabel_model(
+            ffi.new("char[]", path.encode()), max_sparse_density
+        )
         if model_ptr == ffi.NULL:
             raise RuntimeError(f"Failed to load model from {path}")
 
