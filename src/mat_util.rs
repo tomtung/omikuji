@@ -1,5 +1,5 @@
 use crate::Index;
-use bit_set::BitSet;
+use hashbrown::HashSet;
 use ndarray::ArrayViewMut1;
 use num_traits::{Float, Num, Unsigned};
 use ordered_float::NotNan;
@@ -224,7 +224,7 @@ where
     fn shrink_inner_indices(self) -> (Self, Vec<I>) {
         let new_index_to_old = {
             let mut old_indices = Vec::with_capacity(self.inner_dims());
-            let mut index_set = BitSet::with_capacity(self.inner_dims());
+            let mut index_set = HashSet::with_capacity(self.inner_dims());
             for &i in self.indices() {
                 if index_set.insert(i.index()) {
                     old_indices.push(i);

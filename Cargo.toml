@@ -6,7 +6,6 @@ authors = ["Tom Dong <tom.tung.dyb@gmail.com>"]
 
 [dependencies]
 bincode = "1.1"
-bit-set = "0.5"
 clap = { version = "2.33", optional = true }
 hashbrown = "0.5"
 itertools = "0.8"

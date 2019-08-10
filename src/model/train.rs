@@ -244,12 +244,9 @@ impl TreeTrainer {
         examples: Arc<TrainingExamples>,
         label_to_example_indices: &[Vec<usize>],
     ) -> liblinear::MultiLabelClassifier {
-        let classifier = self.classifier_hyper_param(examples.len()).train(
-            &examples.feature_matrix.view(),
-            label_to_example_indices,
-            &examples.index_to_feature,
-            self.all_examples.n_features(),
-        );
+        let classifier = self
+            .classifier_hyper_param(examples.len())
+            .train(&examples.feature_matrix.view(), label_to_example_indices);
 
         self.progress_bar
             .lock()
@@ -263,23 +260,16 @@ impl TreeTrainer {
 /// Internal representation of training examples for training a subtree.
 struct TrainingExamples {
     feature_matrix: SparseMat,
-    index_to_feature: Vec<Index>,
     label_sets: Vec<Arc<IndexSet>>,
 }
 
 impl TrainingExamples {
     #[inline]
-    fn new(
-        feature_matrix: SparseMat,
-        index_to_feature: Vec<Index>,
-        label_sets: Vec<Arc<IndexSet>>,
-    ) -> Self {
+    fn new(feature_matrix: SparseMat, label_sets: Vec<Arc<IndexSet>>) -> Self {
         assert_eq!(feature_matrix.rows(), label_sets.len());
         assert!(!label_sets.is_empty());
-        assert_eq!(feature_matrix.cols(), index_to_feature.len());
         Self {
             feature_matrix,
-            index_to_feature,
             label_sets,
         }
     }
@@ -302,20 +292,14 @@ impl TrainingExamples {
             feature_lists,
             n_features + 1, // + 1 because we added bias term
         );
-        let index_to_feature = (0..feature_matrix.cols() as Index).collect_vec();
         let label_sets = label_sets.into_iter().map(Arc::new).collect_vec();
 
-        Self::new(feature_matrix, index_to_feature, label_sets)
+        Self::new(feature_matrix, label_sets)
     }
 
     #[inline]
     fn len(&self) -> usize {
         self.feature_matrix.rows()
-    }
-
-    #[inline]
-    fn n_features(&self) -> usize {
-        self.feature_matrix.cols()
     }
 
     fn find_examples_with_label(&self, label: Index) -> Vec<usize> {
@@ -348,19 +332,12 @@ impl TrainingExamples {
     }
 
     fn take_examples_by_indices(&self, indices: &[usize]) -> Self {
-        let (new_feature_matrix, mut new_index_to_feature) = self
-            .feature_matrix
-            .copy_outer_dims(&indices)
-            .shrink_inner_indices();
-        for index in &mut new_index_to_feature {
-            *index = self.index_to_feature[*index as usize];
-        }
-
+        let new_feature_matrix = self.feature_matrix.copy_outer_dims(&indices);
         let new_label_sets = indices
             .iter()
             .map(|&i| self.label_sets[i].clone())
             .collect_vec();
-        Self::new(new_feature_matrix, new_index_to_feature, new_label_sets)
+        Self::new(new_feature_matrix, new_label_sets)
     }
 }
 

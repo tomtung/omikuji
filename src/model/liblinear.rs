@@ -1,5 +1,4 @@
 use crate::mat_util::*;
-use crate::Index;
 use itertools::Itertools;
 use rand::prelude::*;
 use rayon::prelude::*;
@@ -76,12 +75,14 @@ impl HyperParam {
         &self,
         feature_matrix: &SparseMatView,
         label_to_example_indices: &[Indices],
-        index_to_feature: &[Index],
-        n_features: usize,
     ) -> MultiLabelClassifier {
         self.validate().unwrap();
 
         assert!(feature_matrix.is_csr());
+        // Remove empty columns from features matrix to speed up training
+        let n_features = feature_matrix.inner_dims();
+        let (feature_matrix, index_to_feature) = feature_matrix.to_owned().shrink_inner_indices();
+
         let solver = match self.loss_type {
             LossType::Hinge => solve_l2r_l2_svc,
             LossType::Log => solve_l2r_lr_dual,
@@ -98,7 +99,7 @@ impl HyperParam {
                 // Train the classifier
                 let mut w = {
                     let (indices, data) = solver(
-                        feature_matrix,
+                        &feature_matrix.view(),
                         &labels,
                         self.eps,
                         self.c,
