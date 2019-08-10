@@ -208,8 +208,8 @@ where
 }
 
 pub trait CsMatITools<DataT: Copy, IndexT: SpIndex>: sprs::SparseMat + Sized {
-    fn shrink_column_indices(self) -> (Self, Vec<IndexT>);
-    fn remap_column_indices(self, old_index_to_new: &[IndexT], n_columns: usize) -> Self;
+    fn shrink_inner_indices(self) -> (Self, Vec<IndexT>);
+    fn remap_inner_indices(self, old_index_to_new: &[IndexT], n_columns: usize) -> Self;
 }
 
 impl<N, I> CsMatITools<N, I> for CsMatI<N, I>
@@ -217,16 +217,14 @@ where
     I: SpIndex,
     N: Copy,
 {
-    /// Shrinks column indices of a CSR matrix.
+    /// Shrinks inner indices of a Sparse matrix.
     ///
-    /// The operation can be reversed by calling map_column_indices on the returned matrix and mapping.
-    fn shrink_column_indices(self) -> (Self, Vec<I>) {
-        assert!(self.is_csr());
-        let shape = self.shape();
-
+    /// The operation can be reversed by calling remap_inner_indices on the returned
+    /// matrix and mapping.
+    fn shrink_inner_indices(self) -> (Self, Vec<I>) {
         let new_index_to_old = {
-            let mut old_indices = Vec::with_capacity(shape.1);
-            let mut index_set = BitSet::with_capacity(shape.1);
+            let mut old_indices = Vec::with_capacity(self.inner_dims());
+            let mut index_set = BitSet::with_capacity(self.inner_dims());
             for &i in self.indices() {
                 if index_set.insert(i.index()) {
                     old_indices.push(i);
@@ -237,7 +235,7 @@ where
         };
 
         let old_index_to_new = {
-            let mut lookup = vec![I::zero(); shape.1];
+            let mut lookup = vec![I::zero(); self.inner_dims()];
             for (new_index, &old_index) in new_index_to_old.iter().enumerate() {
                 lookup[old_index.index()] = I::from::<usize>(new_index).unwrap_or_else(|| {
                     panic!("Failed to convert usize {} to index type", new_index)
@@ -246,22 +244,27 @@ where
             lookup
         };
 
-        let mat = self.remap_column_indices(&old_index_to_new, new_index_to_old.len());
+        let mat = self.remap_inner_indices(&old_index_to_new, new_index_to_old.len());
         (mat, new_index_to_old)
     }
 
-    /// Remap column indices according to the given mapping.
+    /// Remap inner indices according to the given mapping.
     ///
     /// The mapping is assumed to be well-formed, i.e. sorted, within range, and without duplicates.
-    fn remap_column_indices(self, old_index_to_new: &[I], n_columns: usize) -> Self {
-        assert!(self.is_csr());
-        let (n_rows, _) = self.shape();
+    fn remap_inner_indices(self, old_index_to_new: &[I], new_inner_dims: usize) -> Self {
+        let outer_dims = self.outer_dims();
+        let is_csr = self.is_csr();
 
         let (indptr, mut indices, data) = self.into_raw_storage();
         for index in &mut indices {
             *index = old_index_to_new[index.index()];
         }
-        CsMatI::new((n_rows, n_columns), indptr, indices, data)
+        let new_mat = CsMatI::new((outer_dims, new_inner_dims), indptr, indices, data);
+        if is_csr {
+            new_mat
+        } else {
+            new_mat.transpose_into()
+        }
     }
 }
 
@@ -428,45 +431,53 @@ mod tests {
     }
 
     #[test]
-    fn test_remap_column_indices() {
+    fn test_remap_inner_indices() {
         let mat = sprs::CsMat::new(
             (3, 3),
             vec![0, 2, 4, 5],
             vec![0, 1, 0, 2, 2],
             vec![1, 2, 3, 4, 5],
         );
+        let expected_mat = sprs::CsMat::new(
+            (3, 2000),
+            vec![0, 2, 4, 5],
+            vec![10, 100, 10, 1000, 1000],
+            vec![1, 2, 3, 4, 5],
+        );
 
         assert_eq!(
-            sprs::CsMat::new(
-                (3, 2000),
-                vec![0, 2, 4, 5],
-                vec![10, 100, 10, 1000, 1000],
-                vec![1, 2, 3, 4, 5],
-            ),
-            mat.remap_column_indices(&vec![10, 100, 1000], 2000)
+            expected_mat.clone(),
+            mat.clone().remap_inner_indices(&vec![10, 100, 1000], 2000)
+        );
+        assert_eq!(
+            expected_mat.transpose_into(),
+            mat.transpose_into()
+                .remap_inner_indices(&vec![10, 100, 1000], 2000)
         );
     }
 
     #[test]
-    fn test_shrink_column_indices() {
+    fn test_shrink_inner_indices() {
         let mat = sprs::CsMat::new(
             (3, 2000),
             vec![0, 2, 4, 5],
             vec![10, 100, 10, 1000, 1000],
             vec![1, 2, 3, 4, 5],
         );
+        let expected_mat = sprs::CsMat::new(
+            (3, 3),
+            vec![0, 2, 4, 5],
+            vec![0, 1, 0, 2, 2],
+            vec![1, 2, 3, 4, 5],
+        );
         assert_eq!(
-            (
-                sprs::CsMat::new(
-                    (3, 3),
-                    vec![0, 2, 4, 5],
-                    vec![0, 1, 0, 2, 2],
-                    vec![1, 2, 3, 4, 5],
-                ),
-                vec![10, 100, 1000]
-            ),
-            mat.shrink_column_indices()
-        )
+            (expected_mat.clone(), vec![10, 100, 1000]),
+            mat.clone().shrink_inner_indices()
+        );
+        assert_eq!(
+            (expected_mat.transpose_into(), vec![10, 100, 1000]),
+            mat.transpose_into().shrink_inner_indices()
+        );
     }
 
     #[test]

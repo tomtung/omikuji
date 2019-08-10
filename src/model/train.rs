@@ -351,7 +351,7 @@ impl TrainingExamples {
         let (new_feature_matrix, mut new_index_to_feature) = self
             .feature_matrix
             .copy_outer_dims(&indices)
-            .shrink_column_indices();
+            .shrink_inner_indices();
         for index in &mut new_index_to_feature {
             *index = self.index_to_feature[*index as usize];
         }
@@ -422,7 +422,7 @@ impl LabelCluster {
         let (new_feature_matrix, _) = self
             .feature_matrix
             .copy_outer_dims(indices)
-            .shrink_column_indices();
+            .shrink_inner_indices();
 
         Self::new(new_labels, new_feature_matrix)
     }
