@@ -33,8 +33,8 @@ cargo install --git https://github.com/tomtung/parabel-rs.git --features cli
 
 The CLI app will be available as `parabel`. For example, to reproduce the results on the EURLex-4K dataset:
 ```
-parabel train eurlex_train.txt --model_path model.bin
-parabel test model.bin eurlex_test.txt --out_path predictions.txt
+parabel train eurlex_train.txt --model_path ./model
+parabel test ./model eurlex_test.txt --out_path predictions.txt
 ```
 
 
@@ -57,8 +57,8 @@ hyper_param.n_trees = 5
 model = parabel.Model.train_on_data("./eurlex_train.txt", hyper_param)
 
 # Serialize & de-serialize
-model.save("model.bin")
-model = parabel.Model.load("model.bin")
+model.save("./model")
+model = parabel.Model.load("./model")
 # Optionally densify model weights to trade off between prediction speed and memory usage
 model.densify_weights(0.05)
 
@@ -113,7 +113,7 @@ OPTIONS:
         --min_branch_size <SIZE>
             Number of labels below which no futher clustering & branching is done [default: 100]
 
-        --model_path <PATH>                      Path to which the trained model will be saved if provided
+        --model_path <PATH>                      Path of the directory where the trained model will be saved if provided
         --n_threads <T>
             Number of worker threads. If 0, the number is selected automatically [default: 0]
 
@@ -146,7 +146,7 @@ OPTIONS:
         --out_path <PATH>                 Path to the which predictions will be written, if provided
 
 ARGS:
-    <MODEL_PATH>        Path to the trained model
+    <MODEL_PATH>        Path of the directory where the trained model is saved
     <TEST_DATA_PATH>    Path to test dataset file (in the format of the Extreme Classification Repository)
 ```
 

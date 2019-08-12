@@ -4,7 +4,7 @@ extern crate rayon;
 
 use clap::value_t;
 use std::fs::File;
-use std::io::{BufReader, BufWriter, Write};
+use std::io::{BufWriter, Write};
 
 fn set_num_threads(matches: &clap::ArgMatches) {
     rayon::ThreadPoolBuilder::new()
@@ -52,10 +52,7 @@ fn train(matches: &clap::ArgMatches) {
 
     let model = train_hyperparam.train(training_dataset);
     if let Some(model_path) = matches.value_of("model_path") {
-        let model_file = File::create(model_path).expect("Failed to create model file");
-        model
-            .save(BufWriter::new(model_file))
-            .expect("Failed to save model");
+        model.save(model_path).expect("Failed to save model");
     }
 }
 
@@ -64,9 +61,7 @@ fn test(matches: &clap::ArgMatches) {
 
     let model = {
         let model_path = matches.value_of("model_path").unwrap();
-        let model_file = File::open(model_path).expect("Failed to open model file");
-        let mut model =
-            parabel::Model::load(BufReader::new(model_file)).expect("Failed to load model");
+        let mut model = parabel::Model::load(model_path).expect("Failed to load model");
         let max_sparse_density = value_t!(matches, "max_sparse_density", f32).unwrap();
         model.densify_weights(max_sparse_density);
         model
@@ -129,7 +124,7 @@ fn main() {
                 .arg(
                     clap::Arg::with_name("model_path")
                         .long("model_path")
-                        .help("Path to which the trained model will be saved if provided")
+                        .help("Path of the directory where the trained model will be saved if provided")
                         .takes_value(true)
                         .value_name("PATH")
                         .required(false)
@@ -255,7 +250,7 @@ fn main() {
                 .arg(
                     clap::Arg::with_name("model_path")
                         .index(1)
-                        .help("Path to the trained model")
+                        .help("Path of the directory where the trained model is saved")
                         .required(true)
                         .value_name("MODEL_PATH")
                 )

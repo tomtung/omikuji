@@ -2,8 +2,6 @@ use itertools::Itertools;
 use libc::{c_void, size_t};
 use std::convert::TryInto;
 use std::ffi::CStr;
-use std::fs::File;
-use std::io::{BufReader, BufWriter};
 use std::os::raw::{c_char, c_float};
 use std::slice;
 
@@ -17,7 +15,7 @@ pub struct DataSet {
     _private: [u8; 0],
 }
 
-/// Load parabel model from file of the given path.
+/// Load parabel model from the given directory.
 #[no_mangle]
 pub unsafe extern "C" fn load_parabel_model(
     path: *const c_char,
@@ -26,15 +24,14 @@ pub unsafe extern "C" fn load_parabel_model(
     assert!(!path.is_null(), "Path should not be null");
     let maybe_model = CStr::from_ptr(path)
         .to_str()
-        .map_err(|_| "Failed to parse path")
-        .and_then(|path| File::open(path).map_err(|_| "Failed to open file"))
-        .and_then(|file| {
-            parabel::Model::load(BufReader::new(file))
+        .map_err(|e| format!("Failed to parse path: {}", e))
+        .and_then(|path| {
+            parabel::Model::load(path)
                 .map(|mut model| {
                     model.densify_weights(max_sparse_density);
                     model
                 })
-                .map_err(|_| "Failed to load model")
+                .map_err(|e| format!("Failed to load model: {}", e))
         });
 
     match maybe_model {
@@ -46,7 +43,7 @@ pub unsafe extern "C" fn load_parabel_model(
     }
 }
 
-/// Save parabel model to file of the given path.
+/// Save parabel model to the given directory.
 #[no_mangle]
 pub unsafe extern "C" fn save_parabel_model(model_ptr: *mut Model, path: *const c_char) -> i8 {
     assert!(!model_ptr.is_null(), "Model should not be null");
@@ -54,12 +51,11 @@ pub unsafe extern "C" fn save_parabel_model(model_ptr: *mut Model, path: *const 
     let model_ptr = model_ptr as *mut c_void as *mut parabel::Model;
     if let Err(msg) = CStr::from_ptr(path)
         .to_str()
-        .map_err(|_| "Failed to parse path")
-        .and_then(|path| File::create(path).map_err(|_| "Failed to open file"))
-        .and_then(|file| {
+        .map_err(|e| format!("Failed to parse path: {}", e))
+        .and_then(|path| {
             (*model_ptr)
-                .save(BufWriter::new(file))
-                .map_err(|_| "Failed to load model")
+                .save(path)
+                .map_err(|e| format!("Failed to load model: {}", e))
         })
     {
         eprintln!("{}", msg);

@@ -18,7 +18,7 @@ use std::mem::swap;
 /// Model training hyper-parameters.
 pub type TrainHyperParam = train::HyperParam;
 
-#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+#[derive(Eq, PartialEq, Clone, Copy, Debug, Serialize, Deserialize)]
 struct Settings {
     n_features: usize,
     classifier_loss_type: liblinear::LossType,
@@ -30,6 +30,9 @@ pub struct Model {
     trees: Vec<Tree>,
     settings: Settings,
 }
+
+static MODEL_SETTINGS_FILE_NAME: &str = "settings.json";
+static TREE_FILE_NAME_PREFIX: &str = "tree";
 
 impl Model {
     /// Returns a ranked list of predictions for the given input example.
@@ -87,13 +90,70 @@ impl Model {
         SparseVec::new(self.settings.n_features + 1, indices, data)
     }
 
-    /// Serialize model.
-    pub fn save<W: io::Write>(&self, writer: W) -> io::Result<()> {
+    /// Serialize model into the directory with the given path.
+    pub fn save<P: AsRef<std::path::Path>>(&self, dir_path: P) -> io::Result<()> {
         info!("Saving model...");
         let start_t = time::precise_time_s();
 
-        bincode::serialize_into(writer, self)
-            .or_else(|e| Err(io::Error::new(io::ErrorKind::Other, e)))?;
+        let dir_path = dir_path.as_ref();
+        if !dir_path.exists() {
+            std::fs::create_dir_all(dir_path)?;
+        } else if !dir_path.is_dir() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "file with the given name already exists",
+            ));
+        }
+
+        let settings_path = dir_path.join(MODEL_SETTINGS_FILE_NAME);
+        if settings_path.exists() {
+            let reader = std::io::BufReader::new(std::fs::File::open(settings_path)?);
+            let existing_settings = serde_json::from_reader(reader)?;
+            if self.settings != existing_settings {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    "a model with different settings is already saved in the given directory",
+                ));
+            } else {
+                info!(
+                    "A model is already saved at {}; trees will be added to the existing model",
+                    dir_path.display(),
+                );
+            }
+        } else {
+            let writer = std::io::BufWriter::new(std::fs::File::create(settings_path)?);
+            serde_json::to_writer_pretty(writer, &self.settings).map_err(|e| {
+                io::Error::new(
+                    io::ErrorKind::Other,
+                    format!("Unable to serialize settings: {}", e),
+                )
+            })?;
+        }
+
+        let index_to_tree_path =
+            |index: usize| dir_path.join(format!("{}{}.bin", TREE_FILE_NAME_PREFIX, index));
+        let mut curr_index = 0usize;
+        for tree in &self.trees {
+            let mut tree_path = index_to_tree_path(curr_index);
+            while tree_path.exists() {
+                info!(
+                    "File {} already exists, skipping to keep it",
+                    tree_path.display()
+                );
+                curr_index += 1;
+                tree_path = index_to_tree_path(curr_index);
+            }
+
+            info!("Saving tree to {}", tree_path.display());
+            let writer = std::io::BufWriter::new(std::fs::File::create(tree_path)?);
+            bincode::serialize_into(writer, tree).map_err(|e| {
+                io::Error::new(
+                    io::ErrorKind::Other,
+                    format!("Unable to serialize tree: {}", e),
+                )
+            })?;
+            curr_index += 1;
+        }
 
         info!(
             "Model saved; it took {:.2}s",
@@ -102,18 +162,46 @@ impl Model {
         Ok(())
     }
 
-    /// Deserialize model.
-    pub fn load<R: io::Read>(reader: R) -> io::Result<Self> {
+    /// Deserialize model from the given directory.
+    pub fn load<P: AsRef<std::path::Path>>(dir_path: P) -> io::Result<Self> {
         info!("Loading model...");
         let start_t = time::precise_time_s();
 
-        let model: Self = bincode::deserialize_from(reader)
-            .or_else(|e| Err(io::Error::new(io::ErrorKind::Other, e)))?;
+        let dir_path = dir_path.as_ref();
+        let settings = {
+            let settings_path = dir_path.join(MODEL_SETTINGS_FILE_NAME);
+            info!("Loading model settings from {}...", settings_path.display());
+            let reader = std::io::BufReader::new(std::fs::File::open(settings_path)?);
+            serde_json::from_reader(reader)?
+        };
+
+        let mut trees = Vec::<Tree>::new();
+        for entry in dir_path.read_dir()? {
+            let entry = entry?;
+            if entry.file_type()?.is_file() {
+                let file_name = entry.file_name();
+                let file_name_str = file_name.to_string_lossy();
+                if file_name_str.starts_with(TREE_FILE_NAME_PREFIX)
+                    && file_name_str.ends_with(".bin")
+                {
+                    info!("Loading tree from {}...", entry.path().display());
+                    let reader = std::io::BufReader::new(std::fs::File::open(entry.path())?);
+                    let tree = bincode::deserialize_from(reader).map_err(|e| {
+                        io::Error::new(
+                            io::ErrorKind::Other,
+                            format!("Unable to deserialize tree: {}", e),
+                        )
+                    })?;
+                    trees.push(tree);
+                }
+            }
+        }
+
         info!(
             "Model loaded; it took {:.2}s",
             time::precise_time_s() - start_t
         );
-        Ok(model)
+        Ok(Self { settings, trees })
     }
 
     /// Densify model weights to speed up prediction at the cost of more memory usage.

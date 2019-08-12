@@ -20,7 +20,7 @@ class Model(object):
 
     @classmethod
     def load(cls, path: str, max_sparse_density: float = 0.1):
-        """Load parabel model from file of the given path."""
+        """Load parabel model from the given directory."""
         model_ptr = lib.load_parabel_model(
             ffi.new("char[]", path.encode()), max_sparse_density
         )
@@ -35,7 +35,7 @@ class Model(object):
         return lib.parabel_n_features(self._model_ptr)
 
     def save(self, path):
-        """Save parabel model to file of the given path."""
+        """Save parabel model to the given directory."""
         assert self._model_ptr != ffi.NULL
         if (
             lib.save_parabel_model(self._model_ptr, ffi.new("char[]", path.encode()))
