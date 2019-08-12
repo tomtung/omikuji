@@ -16,14 +16,14 @@ pub type DenseVec = ndarray::Array1<f32>;
 /// A vector, can be either dense or sparse.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub(crate) enum Vector {
-    Dense(DenseVec),
+    Dense(Vec<f32>),
     Sparse(SparseVec),
 }
 
 impl Vector {
     pub fn dot(&self, that: &SparseVec) -> f32 {
         match self {
-            Vector::Dense(this) => that.dot_dense(this.view()),
+            Vector::Dense(this) => that.dot_dense(this),
             Vector::Sparse(this) => that.dot(this),
         }
     }
@@ -48,8 +48,8 @@ impl Vector {
                 return; // Already dense, do nothing
             }
             Vector::Sparse(sparse_v) => {
-                let mut dense_v = DenseVec::zeros(sparse_v.dim());
-                sparse_v.scatter(dense_v.as_slice_mut().unwrap());
+                let mut dense_v = vec![0.0; sparse_v.dim()];
+                sparse_v.scatter(&mut dense_v);
                 Vector::Dense(dense_v)
             }
         };
