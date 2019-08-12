@@ -1,4 +1,4 @@
-use super::{cluster, liblinear, Model, Settings, Tree, TreeNode};
+use super::{cluster, liblinear, Model, Node, Settings, Tree};
 use crate::data::DataSet;
 use crate::mat_util::*;
 use crate::util::{create_progress_bar, ProgressBar};
@@ -155,7 +155,7 @@ impl TreeTrainer {
         depth: usize,
         examples: Arc<TrainingExamples>,
         label_cluster: Arc<LabelCluster>,
-    ) -> TreeNode {
+    ) -> Node {
         // If we haven't reached depth limit, have enough labels for further branching,
         // and also successfully performed clustering, then recursively branch and train subtrees
         if depth < self.hyper_param.max_depth
@@ -175,7 +175,7 @@ impl TreeTrainer {
                     .map(|cluster| examples.find_examples_with_labels(&cluster.labels))
                     .collect::<Vec<_>>();
 
-                let (children, classifier_weights) = rayon::join(
+                let (children, weights) = rayon::join(
                     {
                         let examples = examples.clone();
                         || {
@@ -195,10 +195,7 @@ impl TreeTrainer {
                     },
                 );
 
-                return TreeNode::BranchNode {
-                    classifier_weights,
-                    children,
-                };
+                return Node::Branch { weights, children };
             }
         }
 
@@ -212,7 +209,7 @@ impl TreeTrainer {
         examples: Arc<TrainingExamples>,
         label_clusters: Vec<LabelCluster>,
         example_index_lists: &[Vec<usize>],
-    ) -> Vec<TreeNode> {
+    ) -> Vec<Node> {
         // NB: the examples arc itself is moved when creating this vector of clones
         let example_arcs = vec![examples; label_clusters.len()];
         label_clusters
@@ -231,16 +228,16 @@ impl TreeTrainer {
             .collect()
     }
 
-    fn train_leaf_node(&self, examples: Arc<TrainingExamples>, leaf_labels: &[Index]) -> TreeNode {
-        let classifier_weights = {
+    fn train_leaf_node(&self, examples: Arc<TrainingExamples>, leaf_labels: &[Index]) -> Node {
+        let weights = {
             let example_index_lists = leaf_labels
                 .par_iter()
                 .map(|&label| examples.find_examples_with_label(label))
                 .collect::<Vec<_>>();
             self.train_classifier(examples, &example_index_lists)
         };
-        TreeNode::LeafNode {
-            classifier_weights,
+        Node::Leaf {
+            weights,
             labels: leaf_labels.to_vec(),
         }
     }

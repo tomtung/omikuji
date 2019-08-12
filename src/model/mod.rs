@@ -222,24 +222,24 @@ impl Model {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct Tree {
-    root: TreeNode,
+    root: Node,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-enum TreeNode {
-    BranchNode {
-        classifier_weights: Vec<Vector>,
-        children: Vec<TreeNode>,
+enum Node {
+    Branch {
+        weights: Vec<Vector>,
+        children: Vec<Node>,
     },
-    LeafNode {
-        classifier_weights: Vec<Vector>,
+    Leaf {
+        weights: Vec<Vector>,
         labels: Vec<Index>,
     },
 }
 
-impl TreeNode {
+impl Node {
     fn is_leaf(&self) -> bool {
-        if let TreeNode::LeafNode { .. } = self {
+        if let Node::Leaf { .. } = self {
             true
         } else {
             false
@@ -256,20 +256,19 @@ impl TreeNode {
         }
 
         match self {
-            TreeNode::BranchNode {
-                ref mut classifier_weights,
+            Node::Branch {
+                ref mut weights,
                 ref mut children,
             } => {
-                densify(classifier_weights, max_sparse_density);
+                densify(weights, max_sparse_density);
                 children
                     .par_iter_mut()
                     .for_each(|child| child.densify_weights(max_sparse_density));
             }
-            TreeNode::LeafNode {
-                ref mut classifier_weights,
-                ..
+            Node::Leaf {
+                ref mut weights, ..
             } => {
-                densify(classifier_weights, max_sparse_density);
+                densify(weights, max_sparse_density);
             }
         }
     }
@@ -283,8 +282,8 @@ impl Tree {
         beam_size: usize,
     ) -> IndexValueVec {
         assert!(beam_size > 0);
-        let mut curr_level = Vec::<(&TreeNode, f32)>::with_capacity(beam_size * 2);
-        let mut next_level = Vec::<(&TreeNode, f32)>::with_capacity(beam_size * 2);
+        let mut curr_level = Vec::<(&Node, f32)>::with_capacity(beam_size * 2);
+        let mut next_level = Vec::<(&Node, f32)>::with_capacity(beam_size * 2);
 
         curr_level.push((&self.root, 0.));
 
@@ -294,20 +293,14 @@ impl Tree {
             next_level.clear();
             for &(node, node_score) in &curr_level {
                 match node {
-                    TreeNode::BranchNode {
-                        classifier_weights,
-                        children,
-                    } => {
-                        let mut child_scores = liblinear::predict(
-                            classifier_weights,
-                            classifier_loss_type,
-                            feature_vec,
-                        );
+                    Node::Branch { weights, children } => {
+                        let mut child_scores =
+                            liblinear::predict(weights, classifier_loss_type, feature_vec);
                         child_scores += node_score;
                         next_level
                             .extend(children.iter().zip_eq(child_scores.into_iter().cloned()));
                     }
-                    TreeNode::LeafNode { .. } => {
+                    Node::Leaf { .. } => {
                         next_level.push((node, node_score));
                     }
                 }
@@ -323,12 +316,9 @@ impl Tree {
         curr_level
             .iter()
             .flat_map(|&(leaf, leaf_score)| match leaf {
-                TreeNode::LeafNode {
-                    classifier_weights,
-                    labels,
-                } => {
+                Node::Leaf { weights, labels } => {
                     let mut label_scores =
-                        liblinear::predict(classifier_weights, classifier_loss_type, feature_vec);
+                        liblinear::predict(weights, classifier_loss_type, feature_vec);
                     label_scores.mapv_inplace(|v| (v + leaf_score).exp());
                     labels
                         .iter()
