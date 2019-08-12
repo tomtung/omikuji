@@ -60,7 +60,11 @@ impl HyperParam {
     }
 
     /// Adapt regularization based on sample size relative to overall training data size.
-    pub fn adapt_to_sample_size(&self, n_curr_examples: usize, n_total_examples: usize) -> Self {
+    pub(crate) fn adapt_to_sample_size(
+        &self,
+        n_curr_examples: usize,
+        n_total_examples: usize,
+    ) -> Self {
         match self.loss_type {
             LossType::Hinge => *self,
             LossType::Log => Self {
@@ -71,11 +75,11 @@ impl HyperParam {
     }
 
     /// Train a one-vs-all multi-label classifier with the given data.
-    pub fn train<Indices: Deref<Target = [usize]> + Sync>(
+    pub(crate) fn train<Indices: Deref<Target = [usize]> + Sync>(
         &self,
         feature_matrix: &SparseMatView,
         label_to_example_indices: &[Indices],
-    ) -> MultiLabelClassifier {
+    ) -> Vec<Vector> {
         self.validate().unwrap();
 
         assert!(feature_matrix.is_csr());
@@ -87,7 +91,7 @@ impl HyperParam {
             LossType::Hinge => solve_l2r_l2_svc,
             LossType::Log => solve_l2r_lr_dual,
         };
-        let weights = label_to_example_indices
+        label_to_example_indices
             .par_iter()
             .map(|indices| {
                 // For the current classifier, an example is positive iff its index is in the given list
@@ -126,40 +130,21 @@ impl HyperParam {
 
                 w
             })
-            .collect::<Vec<_>>();
-
-        MultiLabelClassifier {
-            weights,
-            loss_type: self.loss_type,
-        }
+            .collect()
     }
 }
 
-/// A one-vs-all multi-label classifier
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct MultiLabelClassifier {
-    weights: Vec<Vector>,
+pub(crate) fn predict(
+    weights: &[Vector],
     loss_type: LossType,
-}
-
-impl MultiLabelClassifier {
-    /// Predict scores for each label.
-    pub fn predict(&self, feature_vec: &SparseVec) -> DenseVec {
-        let mut scores = DenseVec::from_iter(self.weights.iter().map(|w| w.dot(feature_vec)));
-        match self.loss_type {
-            LossType::Log => scores.mapv_inplace(|v| -(-v).exp().ln_1p()),
-            LossType::Hinge => scores.mapv_inplace(|v| -(1. - v).max(0.).powi(2)),
-        }
-        scores
+    feature_vec: &SparseVec,
+) -> DenseVec {
+    let mut scores = DenseVec::from_iter(weights.iter().map(|w| w.dot(feature_vec)));
+    match loss_type {
+        LossType::Log => scores.mapv_inplace(|v| -(-v).exp().ln_1p()),
+        LossType::Hinge => scores.mapv_inplace(|v| -(1. - v).max(0.).powi(2)),
     }
-
-    pub fn densify(&mut self, max_sparse_density: f32) {
-        for w in self.weights.iter_mut() {
-            if !w.is_dense() && w.density() > max_sparse_density {
-                w.densify();
-            }
-        }
-    }
+    scores
 }
 
 /// A coordinate descent solver for L2-loss SVM dual problems.

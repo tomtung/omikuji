@@ -1,4 +1,4 @@
-use super::{cluster, liblinear, Model, Tree, TreeNode};
+use super::{cluster, liblinear, Model, Settings, Tree, TreeNode};
 use crate::data::DataSet;
 use crate::mat_util::*;
 use crate::util::{create_progress_bar, ProgressBar};
@@ -88,7 +88,13 @@ impl HyperParam {
             "Parabel model training complete; it took {:.2}s",
             time::precise_time_s() - start_t
         );
-        Model { trees, n_features }
+        Model {
+            trees,
+            settings: Settings {
+                n_features,
+                classifier_loss_type: self.linear.loss_type,
+            },
+        }
     }
 }
 
@@ -169,7 +175,7 @@ impl TreeTrainer {
                     .map(|cluster| examples.find_examples_with_labels(&cluster.labels))
                     .collect::<Vec<_>>();
 
-                let (children, classifier) = rayon::join(
+                let (children, classifier_weights) = rayon::join(
                     {
                         let examples = examples.clone();
                         || {
@@ -190,7 +196,7 @@ impl TreeTrainer {
                 );
 
                 return TreeNode::BranchNode {
-                    classifier,
+                    classifier_weights,
                     children,
                 };
             }
@@ -226,7 +232,7 @@ impl TreeTrainer {
     }
 
     fn train_leaf_node(&self, examples: Arc<TrainingExamples>, leaf_labels: &[Index]) -> TreeNode {
-        let classifier = {
+        let classifier_weights = {
             let example_index_lists = leaf_labels
                 .par_iter()
                 .map(|&label| examples.find_examples_with_label(label))
@@ -234,7 +240,7 @@ impl TreeTrainer {
             self.train_classifier(examples, &example_index_lists)
         };
         TreeNode::LeafNode {
-            classifier,
+            classifier_weights,
             labels: leaf_labels.to_vec(),
         }
     }
@@ -243,17 +249,18 @@ impl TreeTrainer {
         &self,
         examples: Arc<TrainingExamples>,
         label_to_example_indices: &[Vec<usize>],
-    ) -> liblinear::MultiLabelClassifier {
-        let classifier = self
+    ) -> Vec<Vector> {
+        let classifier_weights = self
             .classifier_hyper_param(examples.len())
             .train(&examples.feature_matrix.view(), label_to_example_indices);
 
+        assert_eq!(classifier_weights.len(), label_to_example_indices.len());
         self.progress_bar
             .lock()
             .expect("Failed to lock progress bar")
             .add(label_to_example_indices.len() as u64);
 
-        classifier
+        classifier_weights
     }
 }
 
