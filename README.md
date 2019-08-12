@@ -59,6 +59,8 @@ model = parabel.Model.train_on_data("./eurlex_train.txt", hyper_param)
 # Serialize & de-serialize
 model.save("model.bin")
 model = parabel.Model.load("model.bin")
+# Optionally densify model weights to trade off between prediction speed and memory usage
+model.densify_weights(0.05)
 
 # Predict
 feature_value_pairs = [

@@ -78,6 +78,14 @@ pub unsafe extern "C" fn free_parabel_model(model_ptr: *mut Model) {
     }
 }
 
+/// Densify model weights to speed up prediction at the cost of more memory usage.
+#[no_mangle]
+pub unsafe extern "C" fn densify_parabel_model(model_ptr: *mut Model, max_sparse_density: f32) {
+    assert!(!model_ptr.is_null(), "Model should not be null");
+    let model_ptr = model_ptr as *mut c_void as *mut parabel::Model;
+    (*model_ptr).densify_weights(max_sparse_density);
+}
+
 /// Get the expected dimension of feature vectors.
 #[no_mangle]
 pub unsafe extern "C" fn parabel_n_features(model_ptr: *const Model) -> size_t {

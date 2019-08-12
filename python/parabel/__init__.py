@@ -43,6 +43,11 @@ class Model(object):
         ):
             raise RuntimeError(f"Failed to save model to {path}")
 
+    def densify_weights(self, max_sparse_density: float = 0.1):
+        """Densify model weights to speed up prediction at the cost of more memory usage."""
+        assert self._model_ptr != ffi.NULL
+        lib.densify_parabel_model(self._model_ptr, max_sparse_density)
+
     def predict(self, feature_value_pairs, beam_size=10, top_k=10):
         """Make predictions with parabel model."""
         assert self._model_ptr != ffi.NULL
