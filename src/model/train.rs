@@ -246,7 +246,7 @@ impl TreeTrainer {
         &self,
         examples: Arc<TrainingExamples>,
         label_to_example_indices: &[Vec<usize>],
-    ) -> Vec<Vector> {
+    ) -> Vec<Option<Vector>> {
         let classifier_weights = self
             .classifier_hyper_param(examples.len())
             .train(&examples.feature_matrix.view(), label_to_example_indices);

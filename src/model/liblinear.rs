@@ -79,7 +79,7 @@ impl HyperParam {
         &self,
         feature_matrix: &SparseMatView,
         label_to_example_indices: &[Indices],
-    ) -> Vec<Vector> {
+    ) -> Vec<Option<Vector>> {
         self.validate().unwrap();
 
         assert!(feature_matrix.is_csr());
@@ -96,8 +96,15 @@ impl HyperParam {
             .map(|indices| {
                 // For the current classifier, an example is positive iff its index is in the given list
                 let mut labels = vec![false; feature_matrix.rows()];
+                let mut n_pos = 0;
                 for &i in indices.iter() {
                     labels[i] = true;
+                    n_pos += 1;
+                }
+                assert_ne!(n_pos, 0);
+                // Don't train if all examples are positives
+                if n_pos == labels.len() {
+                    return None;
                 }
 
                 // Train the classifier
@@ -128,23 +135,28 @@ impl HyperParam {
                     w.densify();
                 }
 
-                w
+                Some(w)
             })
             .collect()
     }
 }
 
 pub(crate) fn predict(
-    weights: &[Vector],
+    weights: &[Option<Vector>],
     loss_type: LossType,
     feature_vec: &SparseVec,
 ) -> DenseVec {
-    let mut scores = DenseVec::from_iter(weights.iter().map(|w| w.dot(feature_vec)));
-    match loss_type {
-        LossType::Log => scores.mapv_inplace(|v| -(-v).exp().ln_1p()),
-        LossType::Hinge => scores.mapv_inplace(|v| -(1. - v).max(0.).powi(2)),
-    }
-    scores
+    DenseVec::from_iter(weights.iter().map(|w| {
+        if let Some(w) = w {
+            let score = w.dot(feature_vec);
+            match loss_type {
+                LossType::Log => -(-score).exp().ln_1p(),
+                LossType::Hinge => -(1. - score).max(0.).powi(2),
+            }
+        } else {
+            0.
+        }
+    }))
 }
 
 /// A coordinate descent solver for L2-loss SVM dual problems.

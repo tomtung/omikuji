@@ -228,11 +228,11 @@ struct Tree {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 enum Node {
     Branch {
-        weights: Vec<Vector>,
+        weights: Vec<Option<Vector>>,
         children: Vec<Node>,
     },
     Leaf {
-        weights: Vec<Vector>,
+        weights: Vec<Option<Vector>>,
         labels: Vec<Index>,
     },
 }
@@ -247,10 +247,12 @@ impl Node {
     }
 
     fn densify_weights(&mut self, max_sparse_density: f32) {
-        fn densify(weights: &mut [Vector], max_sparse_density: f32) {
+        fn densify(weights: &mut [Option<Vector>], max_sparse_density: f32) {
             for w in weights.iter_mut() {
-                if !w.is_dense() && w.density() > max_sparse_density {
-                    w.densify();
+                if let Some(w) = w {
+                    if !w.is_dense() && w.density() > max_sparse_density {
+                        w.densify();
+                    }
                 }
             }
         }
