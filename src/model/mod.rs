@@ -131,7 +131,7 @@ impl Model {
         }
 
         let index_to_tree_path =
-            |index: usize| dir_path.join(format!("{}{}.bin", TREE_FILE_NAME_PREFIX, index));
+            |index: usize| dir_path.join(format!("{}{}.cbor", TREE_FILE_NAME_PREFIX, index));
         let mut curr_index = 0usize;
         for tree in &self.trees {
             let mut tree_path = index_to_tree_path(curr_index);
@@ -146,7 +146,7 @@ impl Model {
 
             info!("Saving tree to {}", tree_path.display());
             let writer = std::io::BufWriter::new(std::fs::File::create(tree_path)?);
-            bincode::serialize_into(writer, tree).map_err(|e| {
+            serde_cbor::to_writer(writer, tree).map_err(|e| {
                 io::Error::new(
                     io::ErrorKind::Other,
                     format!("Unable to serialize tree: {}", e),
@@ -182,11 +182,11 @@ impl Model {
                 let file_name = entry.file_name();
                 let file_name_str = file_name.to_string_lossy();
                 if file_name_str.starts_with(TREE_FILE_NAME_PREFIX)
-                    && file_name_str.ends_with(".bin")
+                    && file_name_str.ends_with(".cbor")
                 {
                     info!("Loading tree from {}...", entry.path().display());
                     let reader = std::io::BufReader::new(std::fs::File::open(entry.path())?);
-                    let tree = bincode::deserialize_from(reader).map_err(|e| {
+                    let tree = serde_cbor::from_reader(reader).map_err(|e| {
                         io::Error::new(
                             io::ErrorKind::Other,
                             format!("Unable to deserialize tree: {}", e),
