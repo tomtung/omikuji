@@ -27,7 +27,7 @@ struct Settings {
 /// A Parabel model, which contains a forest of trees.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Model {
-    trees: Vec<Tree>,
+    trees: Vec<TreeNode>,
     settings: Settings,
 }
 
@@ -175,7 +175,7 @@ impl Model {
             serde_json::from_reader(reader)?
         };
 
-        let mut trees = Vec::<Tree>::new();
+        let mut trees = Vec::<TreeNode>::new();
         for entry in dir_path.read_dir()? {
             let entry = entry?;
             if entry.file_type()?.is_file() {
@@ -221,15 +221,10 @@ impl Model {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-struct Tree {
-    root: Node,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-enum Node {
+enum TreeNode {
     Branch {
         weights: Vec<Option<Vector>>,
-        children: Vec<Node>,
+        children: Vec<TreeNode>,
     },
     Leaf {
         weights: Vec<Option<Vector>>,
@@ -237,9 +232,9 @@ enum Node {
     },
 }
 
-impl Node {
+impl TreeNode {
     fn is_leaf(&self) -> bool {
-        if let Node::Leaf { .. } = self {
+        if let TreeNode::Leaf { .. } = self {
             true
         } else {
             false
@@ -258,7 +253,7 @@ impl Node {
         }
 
         match self {
-            Node::Branch {
+            TreeNode::Branch {
                 ref mut weights,
                 ref mut children,
             } => {
@@ -267,16 +262,14 @@ impl Node {
                     .par_iter_mut()
                     .for_each(|child| child.densify_weights(max_sparse_density));
             }
-            Node::Leaf {
+            TreeNode::Leaf {
                 ref mut weights, ..
             } => {
                 densify(weights, max_sparse_density);
             }
         }
     }
-}
 
-impl Tree {
     fn predict(
         &self,
         classifier_loss_type: liblinear::LossType,
@@ -284,10 +277,10 @@ impl Tree {
         beam_size: usize,
     ) -> IndexValueVec {
         assert!(beam_size > 0);
-        let mut curr_level = Vec::<(&Node, f32)>::with_capacity(beam_size * 2);
-        let mut next_level = Vec::<(&Node, f32)>::with_capacity(beam_size * 2);
+        let mut curr_level = Vec::<(&TreeNode, f32)>::with_capacity(beam_size * 2);
+        let mut next_level = Vec::<(&TreeNode, f32)>::with_capacity(beam_size * 2);
 
-        curr_level.push((&self.root, 0.));
+        curr_level.push((&self, 0.));
 
         // Iterate until only leaves are left
         while curr_level.iter().any(|(node, _)| !node.is_leaf()) {
@@ -295,14 +288,14 @@ impl Tree {
             next_level.clear();
             for &(node, node_score) in &curr_level {
                 match node {
-                    Node::Branch { weights, children } => {
+                    TreeNode::Branch { weights, children } => {
                         let mut child_scores =
                             liblinear::predict(weights, classifier_loss_type, feature_vec);
                         child_scores += node_score;
                         next_level
                             .extend(children.iter().zip_eq(child_scores.into_iter().cloned()));
                     }
-                    Node::Leaf { .. } => {
+                    TreeNode::Leaf { .. } => {
                         next_level.push((node, node_score));
                     }
                 }
@@ -318,7 +311,7 @@ impl Tree {
         curr_level
             .iter()
             .flat_map(|&(leaf, leaf_score)| match leaf {
-                Node::Leaf { weights, labels } => {
+                TreeNode::Leaf { weights, labels } => {
                     let mut label_scores =
                         liblinear::predict(weights, classifier_loss_type, feature_vec);
                     label_scores.mapv_inplace(|v| (v + leaf_score).exp());
@@ -331,9 +324,5 @@ impl Tree {
                 _ => unreachable!(),
             })
             .collect_vec()
-    }
-
-    fn densify_weights(&mut self, max_sparse_density: f32) {
-        self.root.densify_weights(max_sparse_density);
     }
 }

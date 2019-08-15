@@ -1,4 +1,4 @@
-use super::{cluster, liblinear, Model, Node, Settings, Tree};
+use super::{cluster, liblinear, Model, Settings, TreeNode};
 use crate::data::DataSet;
 use crate::mat_util::*;
 use crate::util::{create_progress_bar, ProgressBar};
@@ -144,10 +144,8 @@ impl TreeTrainer {
             .adapt_to_sample_size(n_examples, self.all_examples.len())
     }
 
-    fn train(&self) -> Tree {
-        Tree {
-            root: self.train_subtree(1, self.all_examples.clone(), self.all_labels.clone()),
-        }
+    fn train(&self) -> TreeNode {
+        self.train_subtree(1, self.all_examples.clone(), self.all_labels.clone())
     }
 
     fn train_subtree(
@@ -155,7 +153,7 @@ impl TreeTrainer {
         depth: usize,
         examples: Arc<TrainingExamples>,
         label_cluster: Arc<LabelCluster>,
-    ) -> Node {
+    ) -> TreeNode {
         // If we haven't reached depth limit, have enough labels for further branching,
         // and also successfully performed clustering, then recursively branch and train subtrees
         if depth < self.hyper_param.max_depth
@@ -195,7 +193,7 @@ impl TreeTrainer {
                     },
                 );
 
-                return Node::Branch { weights, children };
+                return TreeNode::Branch { weights, children };
             }
         }
 
@@ -209,7 +207,7 @@ impl TreeTrainer {
         examples: Arc<TrainingExamples>,
         label_clusters: Vec<LabelCluster>,
         example_index_lists: &[Vec<usize>],
-    ) -> Vec<Node> {
+    ) -> Vec<TreeNode> {
         // NB: the examples arc itself is moved when creating this vector of clones
         let example_arcs = vec![examples; label_clusters.len()];
         label_clusters
@@ -228,7 +226,7 @@ impl TreeTrainer {
             .collect()
     }
 
-    fn train_leaf_node(&self, examples: Arc<TrainingExamples>, leaf_labels: &[Index]) -> Node {
+    fn train_leaf_node(&self, examples: Arc<TrainingExamples>, leaf_labels: &[Index]) -> TreeNode {
         let weights = {
             let example_index_lists = leaf_labels
                 .par_iter()
@@ -236,7 +234,7 @@ impl TreeTrainer {
                 .collect::<Vec<_>>();
             self.train_classifier(examples, &example_index_lists)
         };
-        Node::Leaf {
+        TreeNode::Leaf {
             weights,
             labels: leaf_labels.to_vec(),
         }
