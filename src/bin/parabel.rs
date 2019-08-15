@@ -148,7 +148,7 @@ fn main() {
                 .arg(
                     clap::Arg::with_name("min_branch_size")
                         .long("min_branch_size")
-                        .help("Number of labels below which no futher clustering & branching is done")
+                        .help("Number of labels below which no further clustering & branching is done")
                         .takes_value(true)
                         .value_name("SIZE")
                         .default_value(&default_min_branch_size)

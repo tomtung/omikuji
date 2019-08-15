@@ -111,7 +111,7 @@ OPTIONS:
 
         --max_depth <DEPTH>                      Maximum tree depth [default: 20]
         --min_branch_size <SIZE>
-            Number of labels below which no futher clustering & branching is done [default: 100]
+            Number of labels below which no further clustering & branching is done [default: 100]
 
         --model_path <PATH>                      Path of the directory where the trained model will be saved if provided
         --n_threads <T>
