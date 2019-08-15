@@ -212,16 +212,15 @@ fn balanced_kmeans_update_partitions<N>(similarities: ArrayView2<N>, partitions:
 where
     N: Float + Display,
 {
-    let n = similarities.rows();
-    debug_assert_eq!(n, partitions.len());
+    debug_assert_eq!(similarities.rows(), partitions.len());
 
     // Make a copy because we'll be making modifications
     let mut similarities = similarities.to_owned();
 
-    let k = similarities.cols();
-    assert!(k > 0);
+    let k_clusters = similarities.cols();
+    assert!(k_clusters > 0);
 
-    let max_cluster_size = ((partitions.len() as f64) / (k as f64)).ceil() as usize;
+    let max_cluster_size = ((partitions.len() as f64) / (k_clusters as f64)).ceil() as usize;
     assert!(max_cluster_size > 0);
 
     // For each cluster, create a min-heap of (similarity, index) pairs
@@ -230,10 +229,10 @@ where
             Reverse<NotNan<N>>,
             usize
         )>::with_capacity(max_cluster_size + 1);
-        k
+        k_clusters
     ];
 
-    for i in 0..n {
+    for i in 0..similarities.rows() {
         let mut j = i;
         loop {
             let (s, p) = find_max(similarities.row(j)).unwrap();

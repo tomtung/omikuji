@@ -284,9 +284,9 @@ impl TrainingExamples {
     fn new_from_dataset(dataset: DataSet) -> Self {
         let DataSet {
             n_features,
-            n_labels: _,
             mut feature_lists,
             label_sets,
+            ..
         } = dataset;
 
         // Append bias term to each vector to make training linear classifiers easier
