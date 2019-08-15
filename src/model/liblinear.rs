@@ -68,7 +68,7 @@ impl HyperParam {
         match self.loss_type {
             LossType::Hinge => *self,
             LossType::Log => Self {
-                c: n_total_examples as f32 / n_curr_examples as f32,
+                c: self.c * n_total_examples as f32 / n_curr_examples as f32,
                 ..*self
             },
         }
