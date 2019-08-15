@@ -20,6 +20,7 @@ pub struct HyperParam {
     pub centroid_threshold: f32,
     pub linear: liblinear::HyperParam,
     pub cluster: cluster::HyperParam,
+    pub tree_structure_only: bool,
 }
 
 impl Default for HyperParam {
@@ -31,6 +32,7 @@ impl Default for HyperParam {
             centroid_threshold: 0.,
             linear: liblinear::HyperParam::default(),
             cluster: cluster::HyperParam::default(),
+            tree_structure_only: false,
         }
     }
 }
@@ -245,9 +247,12 @@ impl TreeTrainer {
         examples: Arc<TrainingExamples>,
         label_to_example_indices: &[Vec<usize>],
     ) -> Vec<Option<Vector>> {
-        let classifier_weights = self
-            .classifier_hyper_param(examples.len())
-            .train(&examples.feature_matrix.view(), label_to_example_indices);
+        let classifier_weights = if !self.hyper_param.tree_structure_only {
+            self.classifier_hyper_param(examples.len())
+                .train(&examples.feature_matrix.view(), label_to_example_indices)
+        } else {
+            vec![None; label_to_example_indices.len()]
+        };
 
         assert_eq!(classifier_weights.len(), label_to_example_indices.len());
         self.progress_bar

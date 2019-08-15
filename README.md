@@ -85,9 +85,11 @@ USAGE:
     parabel train [FLAGS] [OPTIONS] <TRAINING_DATA_PATH>
 
 FLAGS:
-        --cluster.unbalanced    Perform regular k-means clustering instead of balanced k-means clustering
-    -h, --help                  Prints help information
-    -V, --version               Prints version information
+        --cluster.unbalanced     Perform regular k-means clustering instead of balanced k-means clustering
+    -h, --help                   Prints help information
+        --tree_structure_only    Build the trees without training classifiers; useful when a downstream user needs the
+                                 tree structures only
+    -V, --version                Prints version information
 
 OPTIONS:
         --centroid_threshold <THRESHOLD>         Threshold for pruning label centroid vectors [default: 0]

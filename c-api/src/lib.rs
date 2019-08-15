@@ -178,6 +178,7 @@ pub struct HyperParam {
     pub min_branch_size: size_t,
     pub max_depth: size_t,
     pub centroid_threshold: f32,
+    pub tree_structure_only: bool,
     pub linear_loss_type: LossType,
     pub linear_eps: c_float,
     pub linear_c: c_float,
@@ -208,6 +209,7 @@ impl From<parabel::model::TrainHyperParam> for HyperParam {
             cluster_balanced: hyperparam.cluster.balanced,
             cluster_eps: hyperparam.cluster.eps,
             cluster_min_size: hyperparam.cluster.min_size,
+            tree_structure_only: hyperparam.tree_structure_only,
         }
     }
 }
@@ -221,11 +223,12 @@ impl TryInto<parabel::model::TrainHyperParam> for HyperParam {
         hyper_param.min_branch_size = self.min_branch_size;
         hyper_param.max_depth = self.max_depth;
         hyper_param.centroid_threshold = self.centroid_threshold;
+        hyper_param.tree_structure_only = self.tree_structure_only;
+
         hyper_param.linear.loss_type = match self.linear_loss_type {
             LossType::Hinge => parabel::model::liblinear::LossType::Hinge,
             LossType::Log => parabel::model::liblinear::LossType::Log,
         };
-
         hyper_param.linear.eps = self.linear_eps;
         hyper_param.linear.c = self.linear_c;
         hyper_param.linear.weight_threshold = self.linear_weight_threshold;

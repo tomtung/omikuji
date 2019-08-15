@@ -20,6 +20,7 @@ fn parse_train_hyper_param(matches: &clap::ArgMatches) -> parabel::model::TrainH
     hyper_param.min_branch_size = value_t!(matches, "min_branch_size", usize).unwrap();
     hyper_param.max_depth = value_t!(matches, "max_depth", usize).unwrap();
     hyper_param.centroid_threshold = value_t!(matches, "centroid_threshold", f32).unwrap();
+    hyper_param.tree_structure_only = matches.occurrences_of("tree_structure_only") > 0;
 
     hyper_param.linear.loss_type = match matches.value_of("linear.loss").unwrap() {
         "hinge" => parabel::model::liblinear::LossType::Hinge,
@@ -168,6 +169,13 @@ fn main() {
                         .takes_value(true)
                         .value_name("THRESHOLD")
                         .default_value(&default_centroid_threshold)
+                )
+                .arg(
+                    clap::Arg::with_name("tree_structure_only")
+                        .long("tree_structure_only")
+                        .help("Build the trees without training classifiers; \
+                                  useful when a downstream user needs the tree structures only")
+                        .takes_value(false)
                 )
                 .arg(
                     clap::Arg::with_name("linear.loss")
