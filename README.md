@@ -40,7 +40,7 @@ parabel test ./model eurlex_test.txt --out_path predictions.txt
 
 ### Python Binding
 
-A simple Python binding is also available for training and prediction. It can be install via `pip`:
+A simple Python binding is also available for training and prediction. It can be install via `pip` (note that you still need Cargo installed):
 
 ```
 pip install git+https://github.com/tomtung/parabel-rs.git#subdirectory=python -v
