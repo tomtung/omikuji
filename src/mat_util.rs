@@ -21,6 +21,13 @@ pub(crate) enum Vector {
 }
 
 impl Vector {
+    pub fn dim(&self) -> usize {
+        match self {
+            Vector::Dense(this) => this.len(),
+            Vector::Sparse(this) => this.dim(),
+        }
+    }
+
     pub fn dot(&self, that: &SparseVec) -> f32 {
         match self {
             Vector::Dense(this) => that.dot_dense(this),

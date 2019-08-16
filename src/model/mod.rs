@@ -174,6 +174,7 @@ impl Model {
             let reader = std::io::BufReader::new(std::fs::File::open(settings_path)?);
             serde_json::from_reader(reader)?
         };
+        info!("Loaded model settings {:?}...", settings);
 
         let mut trees = Vec::<TreeNode>::new();
         for entry in dir_path.read_dir()? {
@@ -186,12 +187,18 @@ impl Model {
                 {
                     info!("Loading tree from {}...", entry.path().display());
                     let reader = std::io::BufReader::new(std::fs::File::open(entry.path())?);
-                    let tree = serde_cbor::from_reader(reader).map_err(|e| {
+                    let tree: TreeNode = serde_cbor::from_reader(reader).map_err(|e| {
                         io::Error::new(
-                            io::ErrorKind::Other,
+                            io::ErrorKind::InvalidData,
                             format!("Unable to deserialize tree: {}", e),
                         )
                     })?;
+                    if !tree.is_valid(settings) {
+                        return Err(io::Error::new(
+                            io::ErrorKind::InvalidData,
+                            format!("Tree loaded from {} is invalid", file_name_str),
+                        ));
+                    }
                     trees.push(tree);
                 }
             }
@@ -233,6 +240,30 @@ enum TreeNode {
 }
 
 impl TreeNode {
+    fn is_valid(&self, settings: Settings) -> bool {
+        let is_weight_vec_valid = |w: &Option<Vector>| {
+            if let Some(ref v) = w {
+                v.dim() == settings.n_features + 1 // +1 because it includes bias
+            } else {
+                true
+            }
+        };
+        match self {
+            TreeNode::Branch {
+                ref weights,
+                ref children,
+            } => {
+                weights.len() == children.len()
+                    && weights.iter().all(is_weight_vec_valid)
+                    && children.iter().all(|c| c.is_valid(settings))
+            }
+            TreeNode::Leaf {
+                ref weights,
+                ref labels,
+            } => weights.len() == labels.len() && weights.iter().all(is_weight_vec_valid),
+        }
+    }
+
     fn is_leaf(&self) -> bool {
         if let TreeNode::Leaf { .. } = self {
             true
