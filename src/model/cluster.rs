@@ -126,6 +126,7 @@ impl HyperParam {
 
         // Only keep non-empty clusters
         clusters.retain(|c| !c.is_empty());
+        assert_eq!(n_examples, clusters.iter().map(|c| c.len()).sum::<usize>());
 
         clusters
     }
