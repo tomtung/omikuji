@@ -1,9 +1,11 @@
 extern crate cbindgen;
 
 use std::env;
+use std::path::Path;
 
 fn main() {
     let crate_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
+    let header_path = Path::new(&crate_dir).join("target/include/");
 
     cbindgen::Builder::new()
         .with_crate(&crate_dir)
@@ -12,7 +14,7 @@ fn main() {
         .with_item_prefix("PARABEL_")
         .generate()
         .expect("Unable to generate C bindings")
-        .write_to_file("target/include/parabel.h");
+        .write_to_file(header_path.join("parabel.h"));
 
     cbindgen::Builder::new()
         .with_crate(&crate_dir)
@@ -21,5 +23,5 @@ fn main() {
         .with_namespace("parabel")
         .generate()
         .expect("Unable to generate C++ bindings")
-        .write_to_file("target/include/parabel.hpp");
+        .write_to_file(header_path.join("parabel.hpp"));
 }
