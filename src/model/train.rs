@@ -18,6 +18,7 @@ pub struct HyperParam {
     pub min_branch_size: usize,
     pub max_depth: usize,
     pub centroid_threshold: f32,
+    pub collapse_every_n_layers: usize,
     pub linear: liblinear::HyperParam,
     pub cluster: cluster::HyperParam,
     pub tree_structure_only: bool,
@@ -30,6 +31,7 @@ impl Default for HyperParam {
             min_branch_size: 100,
             max_depth: 20,
             centroid_threshold: 0.,
+            collapse_every_n_layers: 0,
             linear: liblinear::HyperParam::default(),
             cluster: cluster::HyperParam::default(),
             tree_structure_only: false,
@@ -161,14 +163,37 @@ impl TreeTrainer {
         if depth < self.hyper_param.max_depth
             && label_cluster.len() >= self.hyper_param.min_branch_size
         {
-            if let Some(label_clusters) = label_cluster.split(self.hyper_param.cluster) {
-                assert!(label_clusters.len() > 1);
-                self.progress_bar
-                    .lock()
-                    .expect("Failed to lock progress bar")
-                    .total += label_clusters.len() as u64;
-
+            if let Some(mut label_clusters) = label_cluster.split(self.hyper_param.cluster) {
                 drop(label_cluster); // No longer needed
+                assert!(label_clusters.len() > 1);
+
+                // Continue clustering within each sub-cluster, effectively
+                // collapsing adjacent layers
+                for _ in 0..self.hyper_param.collapse_every_n_layers {
+                    let prev_len = label_clusters.len();
+                    label_clusters = label_clusters
+                        .into_par_iter()
+                        .flat_map(|sub_cluster| {
+                            if sub_cluster.len() >= self.hyper_param.min_branch_size {
+                                if let Some(sub_sub_clusters) =
+                                    sub_cluster.split(self.hyper_param.cluster)
+                                {
+                                    return sub_sub_clusters;
+                                }
+                            }
+                            // Return without further clustering if it's too small or
+                            // fails to split
+                            vec![sub_cluster]
+                        })
+                        .collect();
+
+                    // Break early if no more sub-clusters were created
+                    if label_clusters.len() == prev_len {
+                        break;
+                    }
+                }
+
+                self.progress_bar.lock().unwrap().total += label_clusters.len() as u64;
 
                 let example_index_lists = label_clusters
                     .par_iter()

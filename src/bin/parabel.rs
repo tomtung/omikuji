@@ -20,6 +20,8 @@ fn parse_train_hyper_param(matches: &clap::ArgMatches) -> parabel::model::TrainH
     hyper_param.min_branch_size = value_t!(matches, "min_branch_size", usize).unwrap();
     hyper_param.max_depth = value_t!(matches, "max_depth", usize).unwrap();
     hyper_param.centroid_threshold = value_t!(matches, "centroid_threshold", f32).unwrap();
+    hyper_param.collapse_every_n_layers =
+        value_t!(matches, "collapse_every_n_layers", usize).unwrap();
     hyper_param.tree_structure_only = matches.occurrences_of("tree_structure_only") > 0;
 
     hyper_param.linear.loss_type = match matches.value_of("linear.loss").unwrap() {
@@ -102,6 +104,7 @@ fn main() {
     let default_min_branch_size = default_hyperparam.min_branch_size.to_string();
     let default_max_depth = default_hyperparam.max_depth.to_string();
     let default_centroid_threshold = default_hyperparam.centroid_threshold.to_string();
+    let default_collapse_every_n_layers = default_hyperparam.collapse_every_n_layers.to_string();
     let default_linear_eps = default_hyperparam.linear.eps.to_string();
     let default_linear_c = default_hyperparam.linear.c.to_string();
     let default_linear_weight_threshold = default_hyperparam.linear.weight_threshold.to_string();
@@ -169,6 +172,15 @@ fn main() {
                         .takes_value(true)
                         .value_name("THRESHOLD")
                         .default_value(&default_centroid_threshold)
+                )
+                .arg(
+                    clap::Arg::with_name("collapse_every_n_layers")
+                        .long("collapse_every_n_layers")
+                        .help("Number of adjacent layers to collapse, \
+                                  which increases tree arity and decreases tree depth")
+                        .takes_value(true)
+                        .value_name("N")
+                        .default_value(&default_collapse_every_n_layers)
                 )
                 .arg(
                     clap::Arg::with_name("tree_structure_only")

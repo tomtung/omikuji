@@ -98,6 +98,9 @@ OPTIONS:
         --cluster.min_size <SIZE>
             Labels in clusters with sizes smaller than this threshold are reassigned to other clusters instead [default:
             2]
+        --collapse_every_n_layers <N>
+            Number of adjacent layers to collapse, which increases tree arity and decreases tree depth [default: 0]
+
         --linear.c <C>                           Cost co-efficient for regularizing linear classifiers [default: 1]
         --linear.eps <EPS>
             Epsilon value for determining linear classifier convergence [default: 0.1]
