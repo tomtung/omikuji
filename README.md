@@ -118,7 +118,10 @@ OPTIONS:
         --min_branch_size <SIZE>
             Number of labels below which no further clustering & branching is done [default: 100]
 
-        --model_path <PATH>                      Path of the directory where the trained model will be saved if provided
+        --model_path <PATH>
+            Optional path of the directory where the trained model will be saved if provided; if an model with
+            compatible settings is already saved in the given directory, the newly trained trees will be added to the
+            existing model
         --n_threads <T>
             Number of worker threads. If 0, the number is selected automatically [default: 0]
 

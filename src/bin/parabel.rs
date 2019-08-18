@@ -128,7 +128,9 @@ fn main() {
                 .arg(
                     clap::Arg::with_name("model_path")
                         .long("model_path")
-                        .help("Path of the directory where the trained model will be saved if provided")
+                        .help("Optional path of the directory where the trained model will be saved if provided; \
+                               if an model with compatible settings is already saved in the given directory, \
+                               the newly trained trees will be added to the existing model")
                         .takes_value(true)
                         .value_name("PATH")
                         .required(false)
