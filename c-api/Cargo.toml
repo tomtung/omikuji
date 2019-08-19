@@ -1,17 +1,17 @@
 [package]
-name = "parabel_c-api"
+name = "omikuji_c-api"
 version = "0.0.1"
 edition = "2018"
 authors = ["Tom Dong <tom.tung.dyb@gmail.com>"]
 
 [lib]
-name = "parabel"
+name = "omikuji"
 crate-type = ["staticlib", "cdylib"]
 
 [dependencies]
 itertools = "0.8"
 libc = "0.2"
-parabel = { version = "0", path = ".." }
+omikuji = { version = "0.1", path = ".." }
 rayon = "1.1"
 simple_logger = "1.3"
 

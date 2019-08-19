@@ -24,7 +24,7 @@ struct Settings {
     classifier_loss_type: liblinear::LossType,
 }
 
-/// A Parabel model, which contains a forest of trees.
+/// A Omikuji model, which contains a forest of trees.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Model {
     trees: Vec<TreeNode>,

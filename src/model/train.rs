@@ -68,7 +68,7 @@ impl HyperParam {
         }
     }
 
-    /// Train a parabel model on the given dataset.
+    /// Train a omikuji model on the given dataset.
     ///
     /// Here we take ownership of the dataset object to perform necessary prepossessing. One can
     /// choose to clone a dataset before passing it in to avoid losing the original data.
@@ -76,7 +76,7 @@ impl HyperParam {
         self.validate().unwrap();
         let n_features = dataset.n_features;
 
-        info!("Training Parabel model with hyper-parameters {:?}", self);
+        info!("Training model with hyper-parameters {:?}", self);
         let start_t = time::precise_time_s();
 
         info!("Initializing tree trainer");
@@ -89,7 +89,7 @@ impl HyperParam {
             .collect();
 
         info!(
-            "Parabel model training complete; it took {:.2}s",
+            "Model training complete; it took {:.2}s",
             time::precise_time_s() - start_t
         );
         Model {

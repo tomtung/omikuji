@@ -1,40 +1,99 @@
-# Parabel-rs
+# Omikuji
 
-A highly parallelized 🦀Rust implementation of Partioned Label Trees (Prabhu et al., 2018 & Khandagale et al., 2019) for extreme multi-label classification.
+An efficient implementation of Partitioned Label Trees (Prabhu et al., 2018) and its variations for extreme multi-label classification, written in Rust🦀 with love💖.
 
-## Performance
+## Features & Performance
 
-This Rust implementation has been tested on datasets from the [Extreme Classification Repository](http://manikvarma.org/downloads/XC/XMLRepository.html), and compared against the [original Parabel C++ implementation](http://manikvarma.org/code/Parabel/download.html) as well as the [original Bonsai C++ implementation](https://github.com/xmc-aalto/bonsai). We measured training time, and calculated precisions at 1, 3, and 5. The tests were run on a quad-core Intel® Core™ i7-6700 CPU. For both implementations, we used the default hyper-parameter settings, and allowed each implementation to utilize as many CPU cores as possible. The results are summarized in the table below.
+Omikuji has has been tested on datasets from the [Extreme Classification Repository](http://manikvarma.org/downloads/XC/XMLRepository.html). All tests below are run on a quad-core Intel® Core™ i7-6700 CPU, and we allowed as many cores to be utilized as possible. We measured training time, and calculated precisions at 1, 3, and 5. (Note that, due to randomness, results might vary from run to run, especially for smaller datasets.)
 
-| Dataset         	| Metric     	| Parabel 	| Parabel-rs<br/>(balanced,<br/>cluster.k=2) 	| Bonsai  	| Parabel-rs<br/>(unbalanced,<br/>cluster.k=100,<br/>max\_depth=3) 	|
-|-----------------	|------------	|---------	|-------------------------------------------	|---------	|-----------------------------------------------------------------	|
-|  EURLex-4K      	| P@1        	| 82.2    	| 81.9                                      	| 82.8    	| 83.0                                                            	|
-|                 	| P@3        	| 68.8    	| 68.8                                      	| 69.4    	| 69.5                                                            	|
-|                 	| P@5        	| 57.6    	| 57.4                                      	| 58.1    	| 58.3                                                            	|
-|                 	| Train Time 	| 18s     	| 14s                                       	| 87s     	| 19s                                                             	|
-| Amazon-670K     	| P@1        	| 44.9    	| 44.8                                      	| 45.5*   	| 45.6                                                            	|
-|                 	| P@3        	| 39.8    	| 39.8                                      	| 40.3*   	| 40.4                                                            	|
-|                 	| P@5        	| 36.0    	| 36.0                                      	| 36.5*   	| 36.6                                                            	|
-|                 	| Train Time 	| 404s    	| 234s                                      	| 5,759s  	| 1,753s                                                          	|
-|  WikiLSHTC-325K 	| P@1        	| 65.0    	| 64.8                                      	| 66.6*   	| 66.6                                                            	|
-|                 	| P@3        	| 43.2    	| 43.1                                      	| 44.5*   	| 44.4                                                            	|
-|                 	| P@5        	| 32.0    	| 32.1                                      	| 33.0*   	| 33.0                                                            	|
-|                 	| Train Time 	| 959s    	| 659s                                      	| 11,156s 	| 4,259s                                                          	|
+### Parabel, better parallelized
+
+Omikuji provides a more parallelized implementation of Parabel (Prabhu et al., 2018) that trains faster when more CPU cores are available. Compared to the [original implementation](http://manikvarma.org/code/Parabel/download.html) written in C++, which can only utilize the same number of CPU cores as the number of trees (3 by default), Omikuji maintains the same level of precision but trains 1.3x to 1.7x faster on our quad-core machine. **Further speed-up is possible if more CPU cores are available**.
+
+| Dataset         	| Metric     	| Parabel 	| Omikuji<br/>(balanced,<br/>cluster.k=2) 	|
+|-----------------	|------------	|---------	|------------------------------------------	|
+|  EURLex-4K      	| P@1        	| 82.2    	| 82.1                                     	|
+|                 	| P@3        	| 68.8    	| 68.8                                     	|
+|                 	| P@5        	| 57.6    	| 57.7                                     	|
+|                 	| Train Time 	| 18s     	| 14s                                      	|
+| Amazon-670K     	| P@1        	| 44.9    	| 44.8                                     	|
+|                 	| P@3        	| 39.8    	| 39.8                                     	|
+|                 	| P@5        	| 36.0    	| 36.0                                     	|
+|                 	| Train Time 	| 404s    	| 234s                                     	|
+|  WikiLSHTC-325K 	| P@1        	| 65.0    	| 64.8                                     	|
+|                 	| P@3        	| 43.2    	| 43.1                                     	|
+|                 	| P@5        	| 32.0    	| 32.1                                     	|
+|                 	| Train Time 	| 959s    	| 659s                                     	|
+
+### Regular k-means for shallow trees
+
+Following Bonsai (Khandagale et al., 2019), Omikuji supports using regular k-means instead of balanced 2-means clustering for tree construction, which results in wider, shallower and unbalanced trees that train slower but have better precision. Comparing to the [original Bonsai implementation](https://github.com/xmc-aalto/bonsai), Omikuji also achieves the same precisions while training 2.6x to 4.6x faster on our quad-core machine. (Similarly, further speed-up is possible if more CPU cores are available.)
+
+| Dataset         	| Metric     	| Bonsai  	| Omikuji<br/>(unbalanced,<br/>cluster.k=100,<br/>max\_depth=3)	|
+|-----------------	|------------	|---------	|--------------------------------------------------------------	|
+|  EURLex-4K      	| P@1        	| 82.8    	| 83.0                                                         	|
+|                 	| P@3        	| 69.4    	| 69.5                                                         	|
+|                 	| P@5        	| 58.1    	| 58.3                                                         	|
+|                 	| Train Time 	| 87s     	| 19s                                                          	|
+| Amazon-670K     	| P@1        	| 45.5*   	| 45.6                                                         	|
+|                 	| P@3        	| 40.3*   	| 40.4                                                         	|
+|                 	| P@5        	| 36.5*   	| 36.6                                                         	|
+|                 	| Train Time 	| 5,759s  	| 1,753s                                                       	|
+|  WikiLSHTC-325K 	| P@1        	| 66.6*   	| 66.6                                                         	|
+|                 	| P@3        	| 44.5*   	| 44.4                                                         	|
+|                 	| P@5        	| 33.0*   	| 33.0                                                         	|
+|                 	| Train Time 	| 11,156s 	| 4,259s                                                       	|
 
 *\*Precision numbers as reported in the paper; our machine doesn't have enough memory to run the full prediction with their implementation.*
 
-Note that since the C++ implementations train each tree single-threadedly, the number of CPU cores they can utilize is limited to the number of trees (3 by default). In contrast, our Rust implementation is able to utilize **all available CPU cores** whenever possible. On our quad-core machine, this resulted in a 1.3x to 1.7x speed up from Parabel, and a 2.6x to 4.6x speed up from Bonsai; **further speed-up is possible if more CPU cores are available**.
+### Balanced k-means for balanced shallow trees
+
+Sometimes it's desirable to have shallow and wide trees that are also balanced, in which case Omikuji supports the balanced k-means algorithm used by HOMER (Tsoumakas et al., 2008) for clustering as well.
+
+| Dataset         	| Metric     	| Omikuji<br/>(balanced,<br/>cluster.k=100)	|
+|-----------------	|------------	|------------------------------------------	|
+|  EURLex-4K      	| P@1        	| 82.1                                    	|
+|                 	| P@3        	| 69.4                                    	|
+|                 	| P@5        	| 58.1                                    	|
+|                 	| Train Time 	| 19s                                     	|
+| Amazon-670K     	| P@1        	| 45.4                                    	|
+|                 	| P@3        	| 40.3                                    	|
+|                 	| P@5        	| 36.5                                    	|
+|                 	| Train Time 	| 1,153s                                  	|
+|  WikiLSHTC-325K 	| P@1        	| 65.6                                    	|
+|                 	| P@3        	| 43.6                                    	|
+|                 	| P@5        	| 32.5                                    	|
+|                 	| Train Time 	| 3,028s                                  	|
+
+### Layer collapsing for balanced shallow trees
+
+An alternative way for building balanced, shallow and wide trees is to collapse adjacent layers, similar to the tree compression step used in AttentionXML (You et al., 2019): intermediate layers are removed, and their children replace them as the children of their parents. For example, with balanced 2-means clustering, if we collapse 5 layers after each layer, we can increase the tree arity from 2 to 2⁵⁺¹ = 64.
+
+| Dataset         	| Metric     	| Omikuji<br/>(balanced,<br/>cluster.k=2,<br/>collapse 5 layers)	|
+|-----------------	|------------	|---------------------------------------------------------------	|
+|  EURLex-4K      	| P@1        	| 82.4                                                          	|
+|                 	| P@3        	| 69.3                                                          	|
+|                 	| P@5        	| 58.0                                                          	|
+|                 	| Train Time 	| 16s                                                           	|
+| Amazon-670K     	| P@1        	| 45.3                                                          	|
+|                 	| P@3        	| 40.2                                                          	|
+|                 	| P@5        	| 36.4                                                          	|
+|                 	| Train Time 	| 460s                                                           	|
+|  WikiLSHTC-325K 	| P@1        	| 64.9                                                           	|
+|                 	| P@3        	| 43.3                                                          	|
+|                 	| P@5        	| 32.3                                                          	|
+|                 	| Train Time 	| 1,649s                                                        	|
 
 ## Build & Install
-Parabel-rs can be easily built & installed with [Cargo](https://doc.rust-lang.org/cargo/getting-started/installation.html) as a CLI app:
+Omikuji can be easily built & installed with [Cargo](https://doc.rust-lang.org/cargo/getting-started/installation.html) as a CLI app:
 ```
-cargo install --git https://github.com/tomtung/parabel-rs.git --features cli
+cargo install --git https://github.com/tomtung/omikuji.git --features cli
 ```
 
-The CLI app will be available as `parabel`. For example, to reproduce the results on the EURLex-4K dataset:
+The CLI app will be available as `omikuji`. For example, to reproduce the results on the EURLex-4K dataset:
 ```
-parabel train eurlex_train.txt --model_path ./model
-parabel test ./model eurlex_test.txt --out_path predictions.txt
+omikuji train eurlex_train.txt --model_path ./model
+omikuji test ./model eurlex_test.txt --out_path predictions.txt
 ```
 
 
@@ -43,22 +102,23 @@ parabel test ./model eurlex_test.txt --out_path predictions.txt
 A simple Python binding is also available for training and prediction. It can be install via `pip` (note that you still need Cargo installed):
 
 ```
-pip install git+https://github.com/tomtung/parabel-rs.git#subdirectory=python -v
+pip install git+https://github.com/tomtung/omikuji.git#subdirectory=python -v
 ```
 
 The following script demonstrates how to use the Python binding to train a model and make predictions:
 
 ```python
-import parabel
+import omikuji
 
 # Train
-hyper_param = parabel.Model.default_hyper_param()
+hyper_param = omikuji.Model.default_hyper_param()
+# Adjust hyper-parameters as needed
 hyper_param.n_trees = 5
-model = parabel.Model.train_on_data("./eurlex_train.txt", hyper_param)
+model = omikuji.Model.train_on_data("./eurlex_train.txt", hyper_param)
 
 # Serialize & de-serialize
 model.save("./model")
-model = parabel.Model.load("./model")
+model = omikuji.Model.load("./model")
 # Optionally densify model weights to trade off between prediction speed and memory usage
 model.densify_weights(0.05)
 
@@ -77,12 +137,12 @@ label_score_pairs =  model.predict(feature_value_pairs)
 
 ## Usage
 ```
-$ parabel train --help
-parabel-train
-Train a new Parabel model
+$ omikuji train --help
+omikuji-train
+Train a new model
 
 USAGE:
-    parabel train [FLAGS] [OPTIONS] <TRAINING_DATA_PATH>
+    omikuji train [FLAGS] [OPTIONS] <TRAINING_DATA_PATH>
 
 FLAGS:
         --cluster.unbalanced     Perform regular k-means clustering instead of balanced k-means clustering
@@ -132,12 +192,12 @@ ARGS:
 ```
 
 ```
-$ parabel test --help
-parabel-test
-Test an existing Parabel model
+$ omikuji test --help
+omikuji-test
+Test an existing model
 
 USAGE:
-    parabel test [OPTIONS] <MODEL_PATH> <TEST_DATA_PATH>
+    omikuji test [OPTIONS] <MODEL_PATH> <TEST_DATA_PATH>
 
 FLAGS:
     -h, --help       Prints help information
@@ -165,9 +225,15 @@ Our implementation takes dataset files formatted as those provided in the [Extre
 label1,label2,...labelk ft1:ft1_val ft2:ft2_val ft3:ft3_val .. ftd:ftd_val
 ```
 
-## License
-Parabel-rs is licensed under the MIT License.
+## Trivia
+
+The project name comes from [o-mikuji](https://en.wikipedia.org/wiki/O-mikuji) (御神籤), which are predictions about one's future written on strips of paper (labels?) at jinjas and temples in Japan, often tied to branches of pine trees after they are read.
 
 ## References
-- Y. Prabhu, A. Kag, S. Harsola, R. Agrawal, and M. Varma, “Parabel: Partitioned Label Trees for Extreme Classification with Application to Dynamic Search Advertising,” in Proceedings of the 2018 World Wide Web Conference, 2018, pp. 993–1002. doi>[10.1145/3178876.3185998](https://doi.org/10.1145/3178876.3185998)
-- S. Khandagale, H. Xiao, and R. Babbar, “Bonsai - Diverse and Shallow Trees for Extreme Multi-label Classification,” CoRR, vol. [abs/1904.08249](http://arxiv.org/abs/1904.08249), 2019.
+- Y. Prabhu, A. Kag, S. Harsola, R. Agrawal, and M. Varma, “Parabel: Partitioned Label Trees for Extreme Classification with Application to Dynamic Search Advertising,” in Proceedings of the 2018 World Wide Web Conference, 2018, pp. 993–1002.
+- S. Khandagale, H. Xiao, and R. Babbar, “Bonsai - Diverse and Shallow Trees for Extreme Multi-label Classification,” Apr. 2019.
+- G. Tsoumakas, I. Katakis, and I. Vlahavas, “Effective and efficient multilabel classification in domains with large number of labels,” ECML, 2008.
+- R. You, S. Dai, Z. Zhang, H. Mamitsuka, and S. Zhu, “AttentionXML: Extreme Multi-Label Text Classification with Multi-Label Attention Based Recurrent Neural Networks,” Jun. 2019.
+
+## License
+Omikuji is licensed under the MIT License.

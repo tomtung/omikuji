@@ -1,5 +1,5 @@
 extern crate clap;
-extern crate parabel;
+extern crate omikuji;
 extern crate rayon;
 
 use clap::value_t;
@@ -13,8 +13,8 @@ fn set_num_threads(matches: &clap::ArgMatches) {
         .unwrap();
 }
 
-fn parse_train_hyper_param(matches: &clap::ArgMatches) -> parabel::model::TrainHyperParam {
-    let mut hyper_param = parabel::model::train::HyperParam::default();
+fn parse_train_hyper_param(matches: &clap::ArgMatches) -> omikuji::model::TrainHyperParam {
+    let mut hyper_param = omikuji::model::train::HyperParam::default();
 
     hyper_param.n_trees = value_t!(matches, "n_trees", usize).unwrap();
     hyper_param.min_branch_size = value_t!(matches, "min_branch_size", usize).unwrap();
@@ -25,8 +25,8 @@ fn parse_train_hyper_param(matches: &clap::ArgMatches) -> parabel::model::TrainH
     hyper_param.tree_structure_only = matches.occurrences_of("tree_structure_only") > 0;
 
     hyper_param.linear.loss_type = match matches.value_of("linear.loss").unwrap() {
-        "hinge" => parabel::model::liblinear::LossType::Hinge,
-        "log" => parabel::model::liblinear::LossType::Log,
+        "hinge" => omikuji::model::liblinear::LossType::Hinge,
+        "log" => omikuji::model::liblinear::LossType::Log,
         _ => unreachable!(),
     };
     hyper_param.linear.eps = value_t!(matches, "linear.eps", f32).unwrap();
@@ -50,7 +50,7 @@ fn train(matches: &clap::ArgMatches) {
 
     let training_dataset = {
         let path = matches.value_of("training_data").unwrap();
-        parabel::DataSet::load_xc_repo_data_file(path).expect("Failed to load training data")
+        omikuji::DataSet::load_xc_repo_data_file(path).expect("Failed to load training data")
     };
 
     let model = train_hyperparam.train(training_dataset);
@@ -64,7 +64,7 @@ fn test(matches: &clap::ArgMatches) {
 
     let model = {
         let model_path = matches.value_of("model_path").unwrap();
-        let mut model = parabel::Model::load(model_path).expect("Failed to load model");
+        let mut model = omikuji::Model::load(model_path).expect("Failed to load model");
         let max_sparse_density = value_t!(matches, "max_sparse_density", f32).unwrap();
         model.densify_weights(max_sparse_density);
         model
@@ -72,11 +72,11 @@ fn test(matches: &clap::ArgMatches) {
 
     if let Some(test_path) = matches.value_of("test_data") {
         let test_dataset =
-            parabel::DataSet::load_xc_repo_data_file(test_path).expect("Failed to load test data");
+            omikuji::DataSet::load_xc_repo_data_file(test_path).expect("Failed to load test data");
 
         let (predictions, _) = {
             let beam_size = value_t!(matches, "beam_size", usize).unwrap();
-            parabel::model::eval::test_all(&model, &test_dataset, beam_size)
+            omikuji::model::eval::test_all(&model, &test_dataset, beam_size)
         };
         if let Some(out_path) = matches.value_of("out_path") {
             let k_top = value_t!(matches, "k_top", usize).unwrap();
@@ -99,7 +99,7 @@ fn test(matches: &clap::ArgMatches) {
 fn main() {
     simple_logger::init().unwrap();
 
-    let default_hyperparam = parabel::model::train::HyperParam::default();
+    let default_hyperparam = omikuji::model::train::HyperParam::default();
     let default_n_trees = default_hyperparam.n_trees.to_string();
     let default_min_branch_size = default_hyperparam.min_branch_size.to_string();
     let default_max_depth = default_hyperparam.max_depth.to_string();
@@ -113,11 +113,12 @@ fn main() {
     let default_cluster_eps = default_hyperparam.cluster.eps.to_string();
     let default_cluster_min_size = default_hyperparam.cluster.min_size.to_string();
 
-    let arg_matches = clap::App::new("parabel")
-        .about("Parabel: Partitioned Label Trees for Extreme Classification")
+    let arg_matches = clap::App::new("omikuji")
+        .about("Omikuji: an efficient implementation of Partitioned Label Trees and its variations \
+                for extreme multi-label classification")
         .subcommand(
             clap::SubCommand::with_name("train")
-                .about("Train a new Parabel model")
+                .about("Train a new model")
                 .arg(
                     clap::Arg::with_name("training_data")
                         .index(1)
@@ -198,8 +199,8 @@ fn main() {
                         .takes_value(true)
                         .value_name("LOSS")
                         .default_value(match default_hyperparam.linear.loss_type {
-                            parabel::model::liblinear::LossType::Hinge => "hinge",
-                            parabel::model::liblinear::LossType::Log => "log",
+                            omikuji::model::liblinear::LossType::Hinge => "hinge",
+                            omikuji::model::liblinear::LossType::Log => "log",
                         })
                         .possible_values(&["hinge", "log"])
                 )
@@ -268,7 +269,7 @@ fn main() {
             )
         .subcommand(
             clap::SubCommand::with_name("test")
-                .about("Test an existing Parabel model")
+                .about("Test an existing model")
                 .arg(
                     clap::Arg::with_name("model_path")
                         .index(1)

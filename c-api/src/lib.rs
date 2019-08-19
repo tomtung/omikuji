@@ -15,9 +15,9 @@ pub struct DataSet {
     _private: [u8; 0],
 }
 
-/// Load parabel model from the given directory.
+/// Load omikuji model from the given directory.
 #[no_mangle]
-pub unsafe extern "C" fn load_parabel_model(
+pub unsafe extern "C" fn load_omikuji_model(
     path: *const c_char,
     max_sparse_density: f32,
 ) -> *mut Model {
@@ -26,7 +26,7 @@ pub unsafe extern "C" fn load_parabel_model(
         .to_str()
         .map_err(|e| format!("Failed to parse path: {}", e))
         .and_then(|path| {
-            parabel::Model::load(path)
+            omikuji::Model::load(path)
                 .map(|mut model| {
                     model.densify_weights(max_sparse_density);
                     model
@@ -43,12 +43,12 @@ pub unsafe extern "C" fn load_parabel_model(
     }
 }
 
-/// Save parabel model to the given directory.
+/// Save omikuji model to the given directory.
 #[no_mangle]
-pub unsafe extern "C" fn save_parabel_model(model_ptr: *mut Model, path: *const c_char) -> i8 {
+pub unsafe extern "C" fn save_omikuji_model(model_ptr: *mut Model, path: *const c_char) -> i8 {
     assert!(!model_ptr.is_null(), "Model should not be null");
     assert!(!path.is_null(), "Path should not be null");
-    let model_ptr = model_ptr as *mut c_void as *mut parabel::Model;
+    let model_ptr = model_ptr as *mut c_void as *mut omikuji::Model;
     if let Err(msg) = CStr::from_ptr(path)
         .to_str()
         .map_err(|e| format!("Failed to parse path: {}", e))
@@ -65,34 +65,34 @@ pub unsafe extern "C" fn save_parabel_model(model_ptr: *mut Model, path: *const 
     }
 }
 
-/// Free parabel model from memory.
+/// Free omikuji model from memory.
 #[no_mangle]
-pub unsafe extern "C" fn free_parabel_model(model_ptr: *mut Model) {
+pub unsafe extern "C" fn free_omikuji_model(model_ptr: *mut Model) {
     if !model_ptr.is_null() {
-        let model_ptr = model_ptr as *mut c_void as *mut parabel::Model;
+        let model_ptr = model_ptr as *mut c_void as *mut omikuji::Model;
         drop(Box::from_raw(model_ptr));
     }
 }
 
 /// Densify model weights to speed up prediction at the cost of more memory usage.
 #[no_mangle]
-pub unsafe extern "C" fn densify_parabel_model(model_ptr: *mut Model, max_sparse_density: f32) {
+pub unsafe extern "C" fn densify_omikuji_model(model_ptr: *mut Model, max_sparse_density: f32) {
     assert!(!model_ptr.is_null(), "Model should not be null");
-    let model_ptr = model_ptr as *mut c_void as *mut parabel::Model;
+    let model_ptr = model_ptr as *mut c_void as *mut omikuji::Model;
     (*model_ptr).densify_weights(max_sparse_density);
 }
 
 /// Get the expected dimension of feature vectors.
 #[no_mangle]
-pub unsafe extern "C" fn parabel_n_features(model_ptr: *const Model) -> size_t {
+pub unsafe extern "C" fn omikuji_n_features(model_ptr: *const Model) -> size_t {
     assert!(!model_ptr.is_null(), "Model should not be null");
-    let model_ptr = model_ptr as *const c_void as *const parabel::Model;
+    let model_ptr = model_ptr as *const c_void as *const omikuji::Model;
     (*model_ptr).n_features()
 }
 
-/// Make predictions with parabel model.
+/// Make predictions with omikuji model.
 #[no_mangle]
-pub unsafe extern "C" fn parabel_predict(
+pub unsafe extern "C" fn omikuji_predict(
     model_ptr: *const Model,
     beam_size: size_t,
     input_len: size_t,
@@ -103,7 +103,7 @@ pub unsafe extern "C" fn parabel_predict(
     output_scores: *mut c_float,
 ) -> size_t {
     assert!(!model_ptr.is_null(), "Model should not be null");
-    let model_ptr = model_ptr as *const c_void as *const parabel::Model;
+    let model_ptr = model_ptr as *const c_void as *const omikuji::Model;
     let feature_vec = {
         let feature_indices = slice::from_raw_parts(feature_indices, input_len);
         let feature_values = slice::from_raw_parts(feature_values, input_len);
@@ -129,7 +129,7 @@ pub unsafe extern "C" fn parabel_predict(
 
 /// Load a data file from the Extreme Classification Repository.
 #[no_mangle]
-pub unsafe extern "C" fn load_parabel_data_set(
+pub unsafe extern "C" fn load_omikuji_data_set(
     path: *const c_char,
     n_threads: usize,
 ) -> *mut DataSet {
@@ -143,7 +143,7 @@ pub unsafe extern "C" fn load_parabel_data_set(
                 .build()
                 .unwrap()
                 .install(|| {
-                    parabel::DataSet::load_xc_repo_data_file(path)
+                    omikuji::DataSet::load_xc_repo_data_file(path)
                         .map_err(|_| "Failed to laod data file")
                 })
         }) {
@@ -157,9 +157,9 @@ pub unsafe extern "C" fn load_parabel_data_set(
 
 /// Free data set object.
 #[no_mangle]
-pub unsafe extern "C" fn free_parabel_data_set(dataset_ptr: *mut DataSet) {
+pub unsafe extern "C" fn free_omikuji_data_set(dataset_ptr: *mut DataSet) {
     if !dataset_ptr.is_null() {
-        let dataset_ptr = dataset_ptr as *mut c_void as *mut parabel::DataSet;
+        let dataset_ptr = dataset_ptr as *mut c_void as *mut omikuji::DataSet;
         drop(Box::from_raw(dataset_ptr));
     }
 }
@@ -190,16 +190,16 @@ pub struct HyperParam {
     pub cluster_min_size: usize,
 }
 
-impl From<parabel::model::TrainHyperParam> for HyperParam {
-    fn from(hyperparam: parabel::model::TrainHyperParam) -> Self {
+impl From<omikuji::model::TrainHyperParam> for HyperParam {
+    fn from(hyperparam: omikuji::model::TrainHyperParam) -> Self {
         Self {
             n_trees: hyperparam.n_trees,
             min_branch_size: hyperparam.min_branch_size,
             max_depth: hyperparam.max_depth,
             centroid_threshold: hyperparam.centroid_threshold,
             linear_loss_type: match hyperparam.linear.loss_type {
-                parabel::model::liblinear::LossType::Hinge => LossType::Hinge,
-                parabel::model::liblinear::LossType::Log => LossType::Log,
+                omikuji::model::liblinear::LossType::Hinge => LossType::Hinge,
+                omikuji::model::liblinear::LossType::Log => LossType::Log,
             },
             linear_eps: hyperparam.linear.eps,
             linear_c: hyperparam.linear.c,
@@ -214,11 +214,11 @@ impl From<parabel::model::TrainHyperParam> for HyperParam {
     }
 }
 
-impl TryInto<parabel::model::TrainHyperParam> for HyperParam {
+impl TryInto<omikuji::model::TrainHyperParam> for HyperParam {
     type Error = String;
 
-    fn try_into(self) -> Result<parabel::model::TrainHyperParam, Self::Error> {
-        let mut hyper_param = parabel::model::train::HyperParam::default();
+    fn try_into(self) -> Result<omikuji::model::TrainHyperParam, Self::Error> {
+        let mut hyper_param = omikuji::model::train::HyperParam::default();
         hyper_param.n_trees = self.n_trees;
         hyper_param.min_branch_size = self.min_branch_size;
         hyper_param.max_depth = self.max_depth;
@@ -226,8 +226,8 @@ impl TryInto<parabel::model::TrainHyperParam> for HyperParam {
         hyper_param.tree_structure_only = self.tree_structure_only;
 
         hyper_param.linear.loss_type = match self.linear_loss_type {
-            LossType::Hinge => parabel::model::liblinear::LossType::Hinge,
-            LossType::Log => parabel::model::liblinear::LossType::Log,
+            LossType::Hinge => omikuji::model::liblinear::LossType::Hinge,
+            LossType::Log => omikuji::model::liblinear::LossType::Log,
         };
         hyper_param.linear.eps = self.linear_eps;
         hyper_param.linear.c = self.linear_c;
@@ -249,22 +249,22 @@ impl TryInto<parabel::model::TrainHyperParam> for HyperParam {
 
 /// Get the default training hyper-parameters
 #[no_mangle]
-pub extern "C" fn parabel_default_hyper_param() -> HyperParam {
-    parabel::model::train::HyperParam::default().into()
+pub extern "C" fn omikuji_default_hyper_param() -> HyperParam {
+    omikuji::model::train::HyperParam::default().into()
 }
 
-/// Train parabel model on the given data set and hyper-parameters.
+/// Train omikuji model on the given data set and hyper-parameters.
 #[no_mangle]
-pub unsafe extern "C" fn train_parabel_model(
+pub unsafe extern "C" fn train_omikuji_model(
     dataset_ptr: *const DataSet,
     hyper_param: HyperParam,
     n_threads: usize,
 ) -> *mut Model {
     assert!(!dataset_ptr.is_null(), "Dataset should not be null");
-    let result: Result<parabel::model::TrainHyperParam, String> = hyper_param.try_into();
+    let result: Result<omikuji::model::TrainHyperParam, String> = hyper_param.try_into();
     match result {
         Ok(hyper_param) => {
-            let dataset_ptr = dataset_ptr as *const c_void as *const parabel::DataSet;
+            let dataset_ptr = dataset_ptr as *const c_void as *const omikuji::DataSet;
             // Clone the dataset so that the pointer remains valid
             let dataset = (*dataset_ptr).clone();
 
@@ -285,7 +285,7 @@ pub unsafe extern "C" fn train_parabel_model(
 
 /// Initialize a simple logger that writes to stdout.
 #[no_mangle]
-pub extern "C" fn parabel_init_logger() -> i8 {
+pub extern "C" fn omikuji_init_logger() -> i8 {
     match simple_logger::init() {
         Ok(_) => 0,
         Err(_) => {

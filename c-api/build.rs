@@ -10,18 +10,18 @@ fn main() {
     cbindgen::Builder::new()
         .with_crate(&crate_dir)
         .with_language(cbindgen::Language::C)
-        .with_include_guard("PARABEL_H")
-        .with_item_prefix("PARABEL_")
+        .with_include_guard("OMIKUJI_H")
+        .with_item_prefix("OMIKUJI_")
         .generate()
         .expect("Unable to generate C bindings")
-        .write_to_file(header_path.join("parabel.h"));
+        .write_to_file(header_path.join("omikuji.h"));
 
     cbindgen::Builder::new()
         .with_crate(&crate_dir)
         .with_language(cbindgen::Language::Cxx)
-        .with_include_guard("PARABEL_H")
-        .with_namespace("parabel")
+        .with_include_guard("OMIKUJI_H")
+        .with_namespace("omikuji")
         .generate()
         .expect("Unable to generate C++ bindings")
-        .write_to_file(header_path.join("parabel.hpp"));
+        .write_to_file(header_path.join("omikuji.hpp"));
 }

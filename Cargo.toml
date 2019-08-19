@@ -1,6 +1,6 @@
 [package]
-name = "parabel"
-version = "0.0.1"
+name = "omikuji"
+version = "0.1.0"
 edition = "2018"
 authors = ["Tom Dong <tom.tung.dyb@gmail.com>"]
 
@@ -27,8 +27,8 @@ time = "0.1"
 assert_approx_eq = "1.1"
 
 [[bin]]
-name = "parabel"
-path = "src/bin/parabel.rs"
+name = "omikuji"
+path = "src/bin/omikuji.rs"
 required-features = ["cli"]
 
 [features]

@@ -7,10 +7,10 @@ def build_native(spec):
         cmd=["cargo", "build", "--release"], path="../c-api"
     )
     spec.add_cffi_module(
-        module_path="parabel._libparabel",
-        dylib=lambda: build.find_dylib("parabel", in_path="../c-api/target/release"),
+        module_path="omikuji._libomikuji",
+        dylib=lambda: build.find_dylib("omikuji", in_path="../c-api/target/release"),
         header_filename=lambda: build.find_header(
-            "parabel.h", in_path="../c-api/target/include"
+            "omikuji.h", in_path="../c-api/target/include"
         ),
         rtld_flags=["NOW", "NODELETE"],
     )
@@ -26,18 +26,18 @@ with open(
 
 
 setup(
-    name="parabel",
-    version="0.0.1",
+    name="omikuji",
+    version="0.1.0",
     description=(
-        "Python binding to Parabel-rs, a highly parallelized 🦀Rust implementation of Parabel "
+        "Python binding to Omikuji, an efficient implementation of Partioned Label Trees and its variations "
         "for extreme multi-label classification"
     ),
     long_description=LONG_DESCRIPTION,
     long_description_content_type="text/markdown",
     python_requires=">=3.6.0",
-    url="https://github.com/tomtung/parabel-rs",
+    url="https://github.com/tomtung/omikuji",
     license="MIT",
-    packages=["parabel"],
+    packages=["omikuji"],
     zip_safe=False,
     platforms="any",
     setup_requires=["milksnake"],
