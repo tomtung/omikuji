@@ -1,8 +1,18 @@
 [package]
 name = "omikuji"
+description = "an efficient implementation of Partitioned Label Treesand its variations for extreme multi-label classification"
 version = "0.1.0"
 edition = "2018"
 authors = ["Tom Dong <tom.tung.dyb@gmail.com>"]
+license = "MIT"
+repository = "https://github.com/tomtung/omikuji"
+documentation = "https://docs.rs/omikuji"
+keywords = [
+    "machine-learning",
+    "multi-label",
+    "classification",
+    "xmc",
+]
 
 [dependencies]
 clap = { version = "2.33", optional = true }
