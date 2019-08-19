@@ -1,0 +1,6 @@
+include Cargo.toml Cargo.lock
+recursive-include src *.rs
+include c-api/Cargo.toml c-api/Cargo.lock
+recursive-include c-api/src *.rs
+prune target
+prune c-api/target

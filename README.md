@@ -102,7 +102,7 @@ omikuji test ./model eurlex_test.txt --out_path predictions.txt
 A simple Python binding is also available for training and prediction. It can be install via `pip` (note that you still need Cargo installed):
 
 ```
-pip install git+https://github.com/tomtung/omikuji.git#subdirectory=python -v
+pip install git+https://github.com/tomtung/omikuji.git -v
 ```
 
 The following script demonstrates how to use the Python binding to train a model and make predictions:

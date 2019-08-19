@@ -1,38 +1,30 @@
 from setuptools import setup
-import os
 
 
 def build_native(spec):
     build = spec.add_external_build(
-        cmd=["cargo", "build", "--release"], path="../c-api"
+        cmd=["cargo", "build", "--release"], path="c-api"
     )
     spec.add_cffi_module(
         module_path="omikuji._libomikuji",
-        dylib=lambda: build.find_dylib("omikuji", in_path="../c-api/target/release"),
+        dylib=lambda: build.find_dylib("omikuji", in_path="target/release"),
         header_filename=lambda: build.find_header(
-            "omikuji.h", in_path="../c-api/target/include"
+            "omikuji.h", in_path="target/include"
         ),
         rtld_flags=["NOW", "NODELETE"],
     )
 
 
-with open(
-    os.path.join(
-        os.path.abspath(os.path.dirname(__file__)), os.path.pardir, "README.md"
-    ),
-    encoding="utf-8",
-) as f:
-    LONG_DESCRIPTION = "\n" + f.read()
-
-
 setup(
     name="omikuji",
     version="0.1.1",
+    author="Tom Dong",
+    author_email="tom.tung.dyb@gmail.com",
     description=(
         "Python binding to Omikuji, an efficient implementation of Partioned Label Trees and its variations "
         "for extreme multi-label classification"
     ),
-    long_description=LONG_DESCRIPTION,
+    long_description="README.md",
     long_description_content_type="text/markdown",
     python_requires=">=3.6.0",
     url="https://github.com/tomtung/omikuji",
