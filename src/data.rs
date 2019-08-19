@@ -7,12 +7,13 @@ use std::fs;
 use std::io::{Error, ErrorKind, Result};
 use time;
 
+/// A training dataset loaded in memory.
 #[derive(Clone)]
 pub struct DataSet {
-    pub n_features: usize,
-    pub n_labels: usize,
-    pub feature_lists: Vec<IndexValueVec>,
-    pub label_sets: Vec<IndexSet>,
+    pub(crate) n_features: usize,
+    pub(crate) n_labels: usize,
+    pub(crate) feature_lists: Vec<IndexValueVec>,
+    pub(crate) label_sets: Vec<IndexSet>,
 }
 
 impl DataSet {

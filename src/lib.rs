@@ -1,3 +1,10 @@
+/*!
+
+Omikuji provides an efficient implementation of Partitioned Label Trees and its variations
+for extreme multi-label classification.
+
+*/
+
 pub type Index = u32;
 pub type IndexValueVec = Vec<(Index, f32)>;
 pub type IndexSet = hashbrown::HashSet<Index>;
