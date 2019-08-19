@@ -27,7 +27,7 @@ with open(
 
 setup(
     name="omikuji",
-    version="0.1.0",
+    version="0.1.1",
     description=(
         "Python binding to Omikuji, an efficient implementation of Partioned Label Trees and its variations "
         "for extreme multi-label classification"
