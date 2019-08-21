@@ -1,4 +1,4 @@
-__version__ = "0.0.1"
+__version__ = "0.1.2"
 __all__ = ["Model", "LossType"]
 
 from ._libomikuji import lib, ffi
@@ -25,7 +25,7 @@ class Model(object):
             ffi.new("char[]", path.encode()), max_sparse_density
         )
         if model_ptr == ffi.NULL:
-            raise RuntimeError(f"Failed to load model from {path}")
+            raise RuntimeError("Failed to load model from %s" % (path,))
 
         return cls(model_ptr)
 
@@ -41,7 +41,7 @@ class Model(object):
             lib.save_omikuji_model(self._model_ptr, ffi.new("char[]", path.encode()))
             < 0
         ):
-            raise RuntimeError(f"Failed to save model to {path}")
+            raise RuntimeError("Failed to save model to %s" % (path,))
 
     def densify_weights(self, max_sparse_density: float = 0.1):
         """Densify model weights to speed up prediction at the cost of more memory usage."""
@@ -95,7 +95,7 @@ class Model(object):
             ffi.new("char[]", data_path.encode()), n_threads
         )
         if dataset_ptr == ffi.NULL:
-            raise RuntimeError(f"Failed to load data from {data_path}")
+            raise RuntimeError("Failed to load data from %s" % (data_path,))
 
         dataset_ptr = ffi.gc(dataset_ptr, lib.free_omikuji_data_set)
 
@@ -104,7 +104,7 @@ class Model(object):
 
         model_ptr = lib.train_omikuji_model(dataset_ptr, hyper_param, n_threads)
         if model_ptr == ffi.NULL:
-            raise RuntimeError(f"Failed to train model")
+            raise RuntimeError("Failed to train model")
 
         return Model(model_ptr)
 

@@ -2,9 +2,7 @@ from setuptools import setup
 
 
 def build_native(spec):
-    build = spec.add_external_build(
-        cmd=["cargo", "build", "--release"], path="c-api"
-    )
+    build = spec.add_external_build(cmd=["cargo", "build", "--release"], path="c-api")
     spec.add_cffi_module(
         module_path="omikuji._libomikuji",
         dylib=lambda: build.find_dylib("omikuji", in_path="target/release"),
@@ -17,7 +15,7 @@ def build_native(spec):
 
 setup(
     name="omikuji",
-    version="0.1.1",
+    version="0.1.2",
     author="Tom Dong",
     author_email="tom.tung.dyb@gmail.com",
     description=(
@@ -26,7 +24,7 @@ setup(
     ),
     long_description="README.md",
     long_description_content_type="text/markdown",
-    python_requires=">=3.6.0",
+    python_requires=">=3.5",
     url="https://github.com/tomtung/omikuji",
     license="MIT",
     packages=["omikuji"],
@@ -35,6 +33,7 @@ setup(
     setup_requires=["milksnake"],
     install_requires=["milksnake"],
     milksnake_tasks=[build_native],
+    milksnake_universal=False,
     classifiers=[
         "Programming Language :: Python :: 3",
         "Programming Language :: Python :: 3.6",
