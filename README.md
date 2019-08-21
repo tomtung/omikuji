@@ -1,4 +1,5 @@
 # Omikuji
+[![Build Status](https://dev.azure.com/yubingdong/omikuji/_apis/build/status/tomtung.omikuji?branchName=master)](https://dev.azure.com/yubingdong/omikuji/_build/latest?definitionId=1&branchName=master)
 
 An efficient implementation of Partitioned Label Trees (Prabhu et al., 2018) and its variations for extreme multi-label classification, written in Rust🦀 with love💖.
 

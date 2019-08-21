@@ -1,0 +1,143 @@
+parameters:
+  sdist: false
+  manylinux: false
+
+steps:
+  - task: UsePythonVersion@0
+    inputs:
+      versionSpec: '$(python.version)'
+      architecture: '$(python.architecture)'
+    condition: and(succeeded(), ne(${{ parameters.manylinux }}, 'true'), ne(variables['Agent.OS'], 'Darwin'))
+
+  - bash: echo "##vso[task.setvariable variable=pybin;]python"
+    displayName: 'Choose default Python binary'
+    condition: and(succeeded(), ne(${{ parameters.manylinux }}, 'true'), ne(variables['Agent.OS'], 'Darwin'))
+
+  - bash: |
+      set -e -x
+
+      case $(python.version) in
+      3.5)
+        LANG_ABI_VER="cp35-cp35m"
+        ;;
+      3.6)
+        LANG_ABI_VER="cp36-cp36m"
+        ;;
+      3.7)
+        LANG_ABI_VER="cp37-cp37m"
+        ;;
+      esac
+
+      echo "##vso[task.setvariable variable=pybin;]/opt/python/${LANG_ABI_VER}/bin/python"
+    displayName: 'Choose Python for manylinux'
+    condition: and(succeeded(), eq(${{ parameters.manylinux }}, 'true'))
+
+  - bash: |
+      set -e -x
+
+      case $(python.version) in
+      3.5)
+        FULL_VERSION=3.5.4
+        MACOS_VERSION=10.6
+        ;;
+      3.6)
+        FULL_VERSION=3.6.8
+        MACOS_VERSION=10.9
+        ;;
+      3.7)
+        FULL_VERSION=3.7.4
+        MACOS_VERSION=10.9
+        ;;
+      esac
+
+      INSTALLER_NAME=python-$FULL_VERSION-macosx$MACOS_VERSION.pkg
+      curl https://www.python.org/ftp/python/$FULL_VERSION/$INSTALLER_NAME --output $INSTALLER_NAME
+      sudo installer -pkg $INSTALLER_NAME -target /
+
+      echo "##vso[task.setvariable variable=PATH]$PATH:/Users/vsts/Library/Python/$(python.version)/bin"
+
+      PYBIN=/usr/local/bin/python$(python.version)
+      curl https://bootstrap.pypa.io/get-pip.py | "$PYBIN"
+      echo "##vso[task.setvariable variable=pybin]$PYBIN"
+    displayName: 'Install Python for Mac'
+    condition: and(succeeded(), eq(variables['Agent.OS'], 'Darwin'))
+
+  - bash: |
+      set -e -x
+
+      PYBIN=`echo "$(pybin)" | tr -d "'"`  # workaround for https://github.com/microsoft/azure-pipelines-tasks/issues/10331
+      which "$PYBIN"
+      "$PYBIN" -c "import sys; print(sys.version)"
+    displayName: 'Query Python version'
+
+  - bash: |
+      PYBIN=`echo "$(pybin)" | tr -d "'"`
+      "$PYBIN" -m pip install --user --upgrade pip
+      "$PYBIN" -m pip install --user wheel twine setuptools milksnake
+    displayName: 'Install dev dependencies'
+
+  - bash: |
+      PYBIN=`echo "$(pybin)" | tr -d "'"`
+      "$PYBIN" setup.py sdist
+    displayName: 'Build source distribution'
+    condition: and(succeeded(), eq(${{ parameters.sdist }}, 'true'))
+
+  - bash: |
+      set -e -x
+      PYBIN=`echo "$(pybin)" | tr -d "'"`
+      "$PYBIN" -m pip -vvv wheel . -w wheelhouse/
+      ls -lh wheelhouse/
+    displayName: 'Build wheels'
+    condition: and(succeeded(), ne(${{ parameters.sdist }}, 'true'))
+
+  - bash: |
+      set -e -x
+
+      for whl in wheelhouse/$(package_name)-*.whl; do
+        auditwheel repair "$whl" -w wheelhouse/
+      done
+      ls -lh wheelhouse/
+    displayName: 'auditwheel repair (manylinux)'
+    condition: and(succeeded(), eq(${{ parameters.manylinux }}, 'true'), ne(${{ parameters.sdist }}, 'true'))
+
+  - bash: |
+      set -e -x
+      PYBIN=`echo "$(pybin)" | tr -d "'"`
+      "$PYBIN" -m pip install --user delocate
+      delocate-wheel wheelhouse/$(package_name)-*.whl
+      ls -lh wheelhouse/
+    displayName: 'Delocate wheels (macOS)'
+    condition: and(succeeded(), ne(${{ parameters.sdist }}, 'true'), eq(variables['Agent.OS'], 'Darwin'))
+
+  - bash: |
+      set -e -x
+
+      PYBIN=`echo "$(pybin)" | tr -d "'"`
+      "$PYBIN" -m pip install $(package_name) --no-index -f wheelhouse/  --user
+      "$PYBIN" -c "import sys; sys.path.remove(''); import $(package_name); print('Installed version: ' + $(package_name).__version__)"
+      "$PYBIN" -m pip uninstall -y $(package_name)
+    displayName: 'Test installing wheels'
+    condition: and(succeeded(), ne(${{ parameters.sdist }}, 'true'))
+
+  - bash: |
+      set -e -x
+
+      PYBIN=`echo "$(pybin)" | tr -d "'"`
+      mkdir -p dist
+      cp wheelhouse/$(package_name)*.whl dist/
+    displayName: 'Prepare wheels for publish'
+    condition: and(succeeded(), ne(${{ parameters.sdist }}, 'true'), ne(${{ parameters.manylinux }}, 'true'))
+
+  - bash: |
+      set -e -x
+
+      PYBIN=`echo "$(pybin)" | tr -d "'"`
+      mkdir -p dist
+      cp wheelhouse/$(package_name)*manylinux*.whl dist/
+    displayName: 'Prepare wheels for publish (manylinux)'
+    condition: and(succeeded(), ne(${{ parameters.sdist }}, 'true'), eq(${{ parameters.manylinux }}, 'true'))
+
+  - task: PublishPipelineArtifact@1
+    inputs:
+      targetPath: 'dist'
+      artifactName: '$(Agent.JobName) $(python.architecture)'
