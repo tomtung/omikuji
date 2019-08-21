@@ -270,6 +270,7 @@ pub unsafe extern "C" fn train_omikuji_model(
 
             let model = rayon::ThreadPoolBuilder::new()
                 .num_threads(n_threads)
+                .stack_size(32 * 1024 * 1024)
                 .build()
                 .unwrap()
                 .install(|| Box::new(hyper_param.train(dataset)));

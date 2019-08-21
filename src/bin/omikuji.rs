@@ -9,6 +9,7 @@ use std::io::{BufWriter, Write};
 fn set_num_threads(matches: &clap::ArgMatches) {
     rayon::ThreadPoolBuilder::new()
         .num_threads(value_t!(matches, "n_threads", usize).unwrap())
+        .stack_size(32 * 1024 * 1024)
         .build_global()
         .unwrap();
 }
