@@ -64,20 +64,27 @@ steps:
 
   - bash: |
       set -e -x
-
       PYBIN=`echo "$(pybin)" | tr -d "'"`  # workaround for https://github.com/microsoft/azure-pipelines-tasks/issues/10331
+
       which "$PYBIN"
       "$PYBIN" -c "import sys; print(sys.version)"
     displayName: 'Query Python version'
 
   - bash: |
+      set -e -x
       PYBIN=`echo "$(pybin)" | tr -d "'"`
-      "$PYBIN" -m pip install --user --upgrade pip
-      "$PYBIN" -m pip install --user wheel twine setuptools milksnake
+
+      "$PYBIN" -m pip -vvv install --user --upgrade pip
+      "$PYBIN" -m pip -vvv install --user --upgrade "wheel>=0.31.0,<0.32" "twine>=1.11.0" "setuptools>=38.6.0" milksnake
+      "$PYBIN" -m pip --version
+      "$PYBIN" -m wheel version
+      "$PYBIN" -m twine --version
     displayName: 'Install dev dependencies'
 
   - bash: |
+      set -e -x
       PYBIN=`echo "$(pybin)" | tr -d "'"`
+
       "$PYBIN" -m pip install --user black
       "$PYBIN" -m black --check -t py35 ./
     displayName: 'Check Python code format'
@@ -100,6 +107,7 @@ steps:
   - bash: |
       set -e -x
       PYBIN=`echo "$(pybin)" | tr -d "'"`
+
       "$PYBIN" -m pip -vvv wheel . -w wheelhouse/
       ls -lh wheelhouse/
     displayName: 'Build wheels'
@@ -118,7 +126,9 @@ steps:
   - bash: |
       set -e -x
       PYBIN=`echo "$(pybin)" | tr -d "'"`
+
       "$PYBIN" -m pip install --user delocate
+      delocate-wheel --version
       delocate-wheel wheelhouse/$(package_name)-*.whl
       ls -lh wheelhouse/
     displayName: 'Delocate wheels (macOS)'
@@ -126,8 +136,8 @@ steps:
 
   - bash: |
       set -e -x
-
       PYBIN=`echo "$(pybin)" | tr -d "'"`
+
       "$PYBIN" -m pip install $(package_name) --no-index -f wheelhouse/  --user
       "$PYBIN" -c "import sys; sys.path.remove(''); import $(package_name); print('Installed version: ' + $(package_name).__version__)"
       "$PYBIN" -m pip uninstall -y $(package_name)
@@ -137,7 +147,6 @@ steps:
   - bash: |
       set -e -x
 
-      PYBIN=`echo "$(pybin)" | tr -d "'"`
       mkdir -p dist
       cp wheelhouse/$(package_name)*.whl dist/
     displayName: 'Prepare wheels for publish'
@@ -146,7 +155,6 @@ steps:
   - bash: |
       set -e -x
 
-      PYBIN=`echo "$(pybin)" | tr -d "'"`
       mkdir -p dist
       cp wheelhouse/$(package_name)*manylinux*.whl dist/
     displayName: 'Prepare wheels for publish (manylinux)'
