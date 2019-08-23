@@ -22,8 +22,6 @@ setup(
         "Python binding to Omikuji, an efficient implementation of Partioned Label Trees and its variations "
         "for extreme multi-label classification"
     ),
-    long_description="README.md",
-    long_description_content_type="text/markdown",
     python_requires=">=3.5",
     url="https://github.com/tomtung/omikuji",
     license="MIT",
