@@ -78,6 +78,13 @@ steps:
 
   - bash: |
       PYBIN=`echo "$(pybin)" | tr -d "'"`
+      "$PYBIN" -m pip install --user black
+      "$PYBIN" -m black --check -t py35 ./
+    displayName: 'Check Python code format'
+    condition: ne(variables['python.version'], '3.5')
+
+  - bash: |
+      PYBIN=`echo "$(pybin)" | tr -d "'"`
       "$PYBIN" setup.py sdist
     displayName: 'Build source distribution'
     condition: and(succeeded(), eq(${{ parameters.sdist }}, 'true'))
