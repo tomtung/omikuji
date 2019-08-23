@@ -82,6 +82,14 @@ steps:
     displayName: 'Build source distribution'
     condition: and(succeeded(), eq(${{ parameters.sdist }}, 'true'))
 
+  - template: azure-setup-rust.yml
+
+  - bash: |
+      PYBIN=`echo "$(pybin)" | tr -d "'"`
+      "$PYBIN" -m pip -vvv install --user dist/*
+    displayName: 'Test install from source distribution'
+    condition: and(succeeded(), eq(${{ parameters.sdist }}, 'true'))
+
   - bash: |
       set -e -x
       PYBIN=`echo "$(pybin)" | tr -d "'"`

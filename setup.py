@@ -28,7 +28,7 @@ setup(
     url="https://github.com/tomtung/omikuji",
     license="MIT",
     packages=["omikuji"],
-    package_dir = {'': 'python-wrapper'},
+    package_dir={"": "python-wrapper"},
     zip_safe=False,
     platforms="any",
     setup_requires=["milksnake"],

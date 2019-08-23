@@ -48,7 +48,6 @@ stages:
             Python3.7:
               python.version: 3.7
         steps:
-          - template: azure-setup-rust.yml
           - template: azure-python-build.yml
             parameters:
               manylinux: true
@@ -62,7 +61,6 @@ stages:
             Python3.5:
               python.version: 3.5
         steps:
-          - template: azure-setup-rust.yml
           - template: azure-python-build.yml
 
       - job: macOS
@@ -77,5 +75,4 @@ stages:
             Python3.7:
               python.version: 3.7
         steps:
-          - template: azure-setup-rust.yml
           - template: azure-python-build.yml
