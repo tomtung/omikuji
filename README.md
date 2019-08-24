@@ -88,6 +88,11 @@ An alternative way for building balanced, shallow and wide trees is to collapse 
 ## Build & Install
 Omikuji can be easily built & installed with [Cargo](https://doc.rust-lang.org/cargo/getting-started/installation.html) as a CLI app:
 ```
+cargo install omikuji --features cli
+```
+
+Or install from the latest source:
+```
 cargo install --git https://github.com/tomtung/omikuji.git --features cli
 ```
 
@@ -100,8 +105,14 @@ omikuji test ./model eurlex_test.txt --out_path predictions.txt
 
 ### Python Binding
 
-A simple Python binding is also available for training and prediction. It can be install via `pip` (note that you still need Cargo installed):
+A simple Python binding is also available for training and prediction. It can be install via `pip`:
+```
+pip install omikuji
+```
 
+Note that you might still need to install Cargo should compilation become necessary.
+
+You can also install from the latest source:
 ```
 pip install git+https://github.com/tomtung/omikuji.git -v
 ```
