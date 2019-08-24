@@ -1,6 +1,6 @@
 [package]
 name = "omikuji_c-api"
-version = "0.1.2"
+version = "0.1.3"
 edition = "2018"
 authors = ["Tom Dong <tom.tung.dyb@gmail.com>"]
 
