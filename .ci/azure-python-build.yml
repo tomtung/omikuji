@@ -75,7 +75,7 @@ steps:
       PYBIN=`echo "$(pybin)" | tr -d "'"`
 
       "$PYBIN" -m pip -vvv install --user --upgrade pip
-      "$PYBIN" -m pip -vvv install --user --upgrade "wheel>=0.31.0,<0.32" "twine>=1.11.0" "setuptools>=38.6.0" milksnake
+      "$PYBIN" -m pip -vvv install --user --upgrade "wheel>=0.31.0,<0.32" "setuptools>=38.6.0" twine milksnake
       "$PYBIN" -m pip --version
       "$PYBIN" -m wheel version
       "$PYBIN" -m twine --version
@@ -159,6 +159,13 @@ steps:
       cp wheelhouse/$(package_name)*manylinux*.whl dist/
     displayName: 'Prepare wheels for publish (manylinux)'
     condition: and(succeeded(), ne(${{ parameters.sdist }}, 'true'), eq(${{ parameters.manylinux }}, 'true'))
+
+  - bash: |
+      set -e -x
+      PYBIN=`echo "$(pybin)" | tr -d "'"`
+
+      "$PYBIN" -m twine check dist/*
+    displayName: 'Check artifacts with twine'
 
   - task: PublishPipelineArtifact@1
     inputs:
