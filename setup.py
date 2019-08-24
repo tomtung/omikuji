@@ -1,4 +1,5 @@
 from setuptools import setup
+from os import path
 
 
 def build_native(spec):
@@ -13,6 +14,12 @@ def build_native(spec):
     )
 
 
+def load_readme():
+    curr_dir = path.abspath(path.dirname(__file__))
+    with open(path.join(curr_dir, "README.md"), encoding="utf-8") as f:
+        return f.read()
+
+
 setup(
     name="omikuji",
     version="0.1.2",
@@ -22,6 +29,8 @@ setup(
         "Python binding to Omikuji, an efficient implementation of Partioned Label Trees and its variations "
         "for extreme multi-label classification"
     ),
+    long_description=load_readme(),
+    long_description_content_type="text/markdown",
     python_requires=">=3.5",
     url="https://github.com/tomtung/omikuji",
     license="MIT",
