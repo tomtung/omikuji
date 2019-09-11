@@ -51,9 +51,10 @@ impl HyperParam {
     }
 
     /// Find clusters from the given data.
-    pub fn train<N, I>(&self, feature_matrix: &CsMatViewI<N, I>) -> Vec<Vec<usize>>
+    pub fn train<N, I, Iptr>(&self, feature_matrix: &CsMatViewI<N, I, Iptr>) -> Vec<Vec<usize>>
     where
         I: SpIndex,
+        Iptr: SpIndex,
         N: Float + AddAssign + DivAssign + ScalarOperand + Display + Sum,
     {
         assert!(feature_matrix.is_csr());
@@ -147,9 +148,10 @@ impl HyperParam {
     }
 }
 
-fn initialize_centroids<N, I>(feature_matrix: &CsMatViewI<N, I>, k: usize) -> Array2<N>
+fn initialize_centroids<N, I, Iptr>(feature_matrix: &CsMatViewI<N, I, Iptr>, k: usize) -> Array2<N>
 where
     I: SpIndex,
+    Iptr: SpIndex,
     N: Float + AddAssign,
 {
     let mut centroids = Array2::zeros((feature_matrix.cols(), k).f());
@@ -172,14 +174,11 @@ where
     centroids
 }
 
-fn calculate_similarities_to_centroids<N, I>(
-    feature_matrix: &CsMatViewI<N, I>,
+fn calculate_similarities_to_centroids<N: Float, I: SpIndex, Iptr: SpIndex>(
+    feature_matrix: &CsMatViewI<N, I, Iptr>,
     centroids: ArrayView2<N>,
     mut similarities: ArrayViewMut2<N>,
-) where
-    I: SpIndex,
-    N: Float,
-{
+) {
     debug_assert!(feature_matrix.is_csr());
     debug_assert_eq!(similarities.rows(), feature_matrix.rows());
     debug_assert_eq!(centroids.rows(), feature_matrix.cols());
@@ -284,12 +283,13 @@ where
     }
 }
 
-fn update_centroids<N, I>(
-    feature_matrix: &CsMatViewI<N, I>,
+fn update_centroids<N, I, Iptr>(
+    feature_matrix: &CsMatViewI<N, I, Iptr>,
     partitions: &[usize],
     mut centroids: ArrayViewMut2<N>,
 ) where
     I: SpIndex,
+    Iptr: SpIndex,
     N: Float + AddAssign + DivAssign + ScalarOperand,
 {
     debug_assert_eq!(feature_matrix.rows(), partitions.len());

@@ -9,8 +9,8 @@ use std::fmt::Display;
 use std::ops::{AddAssign, Deref, DerefMut, DivAssign};
 
 pub type SparseVec = sprs::CsVecI<f32, Index>;
-pub type SparseMat = sprs::CsMatI<f32, Index>;
-pub type SparseMatView<'a> = sprs::CsMatViewI<'a, f32, Index>;
+pub type SparseMat = sprs::CsMatI<f32, Index, usize>;
+pub type SparseMatView<'a> = sprs::CsMatViewI<'a, f32, Index, usize>;
 pub type DenseVec = ndarray::Array1<f32>;
 
 /// A vector, can be either dense or sparse.
@@ -147,52 +147,49 @@ impl<IndexT, ValueT> OwnedIndexValuePairs<IndexT, ValueT> for Vec<(IndexT, Value
 pub fn csrmat_from_index_value_pair_lists<IndexT, ValueT>(
     pair_lists: Vec<Vec<(IndexT, ValueT)>>,
     n_col: usize,
-) -> sprs::CsMatI<ValueT, IndexT>
+) -> sprs::CsMatI<ValueT, IndexT, usize>
 where
     IndexT: SpIndex,
     ValueT: Copy,
 {
     let n_row = pair_lists.len();
-    let mut indptr: Vec<IndexT> = Vec::with_capacity(n_row + 1);
+    let mut indptr: Vec<usize> = Vec::with_capacity(n_row + 1);
     let mut indices: Vec<IndexT> = Vec::new();
     let mut data: Vec<ValueT> = Vec::new();
 
-    indptr.push(IndexT::zero());
+    indptr.push(0);
     for row in pair_lists.into_iter() {
         for (i, v) in row.into_iter() {
             assert!(i.index() < n_col);
             indices.push(i);
             data.push(v);
         }
-        indptr.push(
-            IndexT::from::<usize>(indices.len()).unwrap_or_else(|| {
-                panic!("Failed to convert usize {} to index type", indices.len())
-            }),
-        );
+        indptr.push(indices.len());
     }
 
     sprs::CsMatI::new((n_row, n_col), indptr, indices, data)
 }
 
-pub trait CsMatBaseTools<DataT, IndexT: SpIndex>: sprs::SparseMat {
-    fn copy_outer_dims(&self, indices: &[usize]) -> CsMatI<DataT, IndexT>;
+pub trait CsMatBaseTools<DataT, IndexT: SpIndex, Iptr: SpIndex>: sprs::SparseMat {
+    fn copy_outer_dims(&self, indices: &[usize]) -> CsMatI<DataT, IndexT, Iptr>;
 }
 
-impl<N, I, IptrStorage, IndStorage, DataStorage> CsMatBaseTools<N, I>
-    for CsMatBase<N, I, IptrStorage, IndStorage, DataStorage>
+impl<N, I, Iptr, IptrStorage, IndStorage, DataStorage> CsMatBaseTools<N, I, Iptr>
+    for CsMatBase<N, I, IptrStorage, IndStorage, DataStorage, Iptr>
 where
     I: SpIndex,
     N: Copy,
-    IptrStorage: Deref<Target = [I]>,
+    IptrStorage: Deref<Target = [Iptr]>,
     IndStorage: Deref<Target = [I]>,
     DataStorage: Deref<Target = [N]>,
+    Iptr: SpIndex,
 {
-    fn copy_outer_dims(&self, indices: &[usize]) -> CsMatI<N, I> {
-        let mut iptr = Vec::<I>::with_capacity(indices.len() + 1);
+    fn copy_outer_dims(&self, indices: &[usize]) -> CsMatI<N, I, Iptr> {
+        let mut iptr = Vec::<Iptr>::with_capacity(indices.len() + 1);
         let mut ind = Vec::<I>::with_capacity(indices.len() * 2);
         let mut data = Vec::<N>::with_capacity(indices.len() * 2);
 
-        iptr.push(I::zero());
+        iptr.push(Iptr::zero());
         for &i in indices {
             if let Some(v) = self.outer_view(i) {
                 for &i in v.indices() {
@@ -204,7 +201,7 @@ where
             }
 
             iptr.push(
-                I::from::<usize>(ind.len()).unwrap_or_else(|| {
+                Iptr::from::<usize>(ind.len()).unwrap_or_else(|| {
                     panic!("Failed to convert usize {} to index type", ind.len())
                 }),
             );
@@ -219,10 +216,11 @@ pub trait CsMatITools<DataT: Copy, IndexT: SpIndex>: sprs::SparseMat + Sized {
     fn remap_inner_indices(self, old_index_to_new: &[IndexT], n_columns: usize) -> Self;
 }
 
-impl<N, I> CsMatITools<N, I> for CsMatI<N, I>
+impl<N, I, Iptr> CsMatITools<N, I> for CsMatI<N, I, Iptr>
 where
     I: SpIndex,
     N: Copy,
+    Iptr: SpIndex,
 {
     /// Shrinks inner indices of a Sparse matrix.
     ///
