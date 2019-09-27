@@ -72,7 +72,7 @@ impl HyperParam {
     ///
     /// Here we take ownership of the dataset object to perform necessary prepossessing. One can
     /// choose to clone a dataset before passing it in to avoid losing the original data.
-    pub fn train(&self, dataset: DataSet) -> Model {
+    pub fn train(&self, dataset: DataSet, all_labels: Option<LabelCluster>) -> Model {
         self.validate().unwrap();
         let n_features = dataset.n_features;
 
@@ -80,7 +80,7 @@ impl HyperParam {
         let start_t = time::precise_time_s();
 
         info!("Initializing tree trainer");
-        let trainer = TreeTrainer::initialize(dataset, *self);
+        let trainer = TreeTrainer::initialize(dataset, all_labels, *self);
 
         info!("Start training forest");
         let trees: Vec<_> = (0..self.n_trees)
@@ -113,18 +113,24 @@ impl TreeTrainer {
     /// Initialize a reusable tree trainer with the dataset and hyper-parameters.
     ///
     /// Dataset is assumed to be well-formed.
-    fn initialize(mut dataset: DataSet, hyper_param: HyperParam) -> Self {
+    fn initialize(
+        mut dataset: DataSet,
+        all_labels: Option<LabelCluster>,
+        hyper_param: HyperParam,
+    ) -> Self {
         assert_eq!(dataset.feature_lists.len(), dataset.label_sets.len());
         // l2-normalize all examples in the dataset
         dataset
             .feature_lists
             .par_iter_mut()
             .for_each(|v| v.l2_normalize());
-        // Initialize label clusters
-        let all_labels = Arc::new(LabelCluster::new_from_dataset(
-            &dataset,
-            hyper_param.centroid_threshold,
-        ));
+
+        // Initialize label features if not provided
+        let all_labels = Arc::new(if let Some(all_labels) = all_labels {
+            all_labels
+        } else {
+            LabelCluster::new_centroids(&dataset, hyper_param.centroid_threshold)
+        });
 
         // Initialize examples set
         let all_examples = Arc::new(TrainingExamples::new_from_dataset(dataset));
@@ -374,13 +380,13 @@ impl TrainingExamples {
 }
 
 /// Internal representation of label cluster for building the structure of a subtree.
-struct LabelCluster {
+pub struct LabelCluster {
     labels: Vec<Index>,
     feature_matrix: SparseMat,
 }
 
 impl LabelCluster {
-    fn new(labels: Vec<Index>, feature_matrix: SparseMat) -> Self {
+    pub(crate) fn new(labels: Vec<Index>, feature_matrix: SparseMat) -> Self {
         assert_eq!(labels.len(), feature_matrix.rows());
         assert!(!labels.is_empty());
         Self {
@@ -389,7 +395,7 @@ impl LabelCluster {
         }
     }
 
-    fn new_from_dataset(dataset: &DataSet, centroid_threshold: f32) -> Self {
+    fn new_centroids(dataset: &DataSet, centroid_threshold: f32) -> Self {
         let (labels, label_centroids) = Self::compute_label_centroids(&dataset, centroid_threshold);
         let label_centroids =
             csrmat_from_index_value_pair_lists(label_centroids, dataset.n_features);

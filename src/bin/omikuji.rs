@@ -53,8 +53,10 @@ fn train(matches: &clap::ArgMatches) {
         let path = matches.value_of("training_data").unwrap();
         omikuji::DataSet::load_xc_repo_data_file(path).expect("Failed to load training data")
     };
-
-    let model = train_hyperparam.train(training_dataset);
+    let label_features = matches.value_of("label_features").map(|path| {
+        omikuji::data::load_label_features_file(path).expect("Failed to load label features data")
+    });
+    let model = train_hyperparam.train(training_dataset, label_features);
     if let Some(model_path) = matches.value_of("model_path") {
         model.save(model_path).expect("Failed to save model");
     }
@@ -126,6 +128,17 @@ fn main() {
                         .help("Path to training dataset file (in the format of the Extreme Classification Repository)")
                         .required(true)
                         .value_name("TRAINING_DATA_PATH")
+                )
+                .arg(
+                    clap::Arg::with_name("label_features")
+                        .long("label_features")
+                        .help("Optional path to label features data file; if not provided, \
+                               the feature vector of a label is the centroid of feature vectors of training examples on which it's labeled. \
+                               The data format is similar to the dataset files from the Extreme Classification Repository, \
+                               except that the header line contains two numbers, namely the number of labels and features respectively, \
+                               and that each data line should contain exactly one label.")
+                        .required(false)
+                        .value_name("label_features")
                 )
                 .arg(
                     clap::Arg::with_name("model_path")
