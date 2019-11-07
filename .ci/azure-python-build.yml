@@ -54,7 +54,7 @@ steps:
       curl https://www.python.org/ftp/python/$FULL_VERSION/$INSTALLER_NAME --output $INSTALLER_NAME
       sudo installer -pkg $INSTALLER_NAME -target /
 
-      echo "##vso[task.setvariable variable=PATH]$PATH:/Users/vsts/Library/Python/$(python.version)/bin"
+      echo "##vso[task.setvariable variable=PATH]$PATH:/Users/runner/Library/Python/$(python.version)/bin"
 
       PYBIN=/usr/local/bin/python$(python.version)
       curl https://bootstrap.pypa.io/get-pip.py | "$PYBIN"
