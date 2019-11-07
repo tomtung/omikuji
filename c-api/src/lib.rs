@@ -55,7 +55,7 @@ pub unsafe extern "C" fn save_omikuji_model(model_ptr: *mut Model, path: *const 
         .and_then(|path| {
             (*model_ptr)
                 .save(path)
-                .map_err(|e| format!("Failed to load model: {}", e))
+                .map_err(|e| format!("Failed to save model: {}", e))
         })
     {
         eprintln!("{}", msg);
