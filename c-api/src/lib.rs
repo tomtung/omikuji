@@ -1,8 +1,8 @@
 use itertools::Itertools;
-use libc::{c_void, size_t};
+use libc::size_t;
 use std::convert::TryInto;
 use std::ffi::CStr;
-use std::os::raw::{c_char, c_float};
+use std::os::raw::{c_char, c_float, c_void};
 use std::slice;
 
 #[repr(C)]
@@ -178,6 +178,7 @@ pub struct HyperParam {
     pub min_branch_size: size_t,
     pub max_depth: size_t,
     pub centroid_threshold: f32,
+    pub collapse_every_n_layers: size_t,
     pub tree_structure_only: bool,
     pub linear_loss_type: LossType,
     pub linear_eps: c_float,
@@ -191,25 +192,26 @@ pub struct HyperParam {
 }
 
 impl From<omikuji::model::TrainHyperParam> for HyperParam {
-    fn from(hyperparam: omikuji::model::TrainHyperParam) -> Self {
+    fn from(hyper_param: omikuji::model::TrainHyperParam) -> Self {
         Self {
-            n_trees: hyperparam.n_trees,
-            min_branch_size: hyperparam.min_branch_size,
-            max_depth: hyperparam.max_depth,
-            centroid_threshold: hyperparam.centroid_threshold,
-            linear_loss_type: match hyperparam.linear.loss_type {
+            n_trees: hyper_param.n_trees,
+            min_branch_size: hyper_param.min_branch_size,
+            max_depth: hyper_param.max_depth,
+            centroid_threshold: hyper_param.centroid_threshold,
+            collapse_every_n_layers: hyper_param.collapse_every_n_layers,
+            linear_loss_type: match hyper_param.linear.loss_type {
                 omikuji::model::liblinear::LossType::Hinge => LossType::Hinge,
                 omikuji::model::liblinear::LossType::Log => LossType::Log,
             },
-            linear_eps: hyperparam.linear.eps,
-            linear_c: hyperparam.linear.c,
-            linear_weight_threshold: hyperparam.linear.weight_threshold,
-            linear_max_iter: hyperparam.linear.max_iter,
-            cluster_k: hyperparam.cluster.k,
-            cluster_balanced: hyperparam.cluster.balanced,
-            cluster_eps: hyperparam.cluster.eps,
-            cluster_min_size: hyperparam.cluster.min_size,
-            tree_structure_only: hyperparam.tree_structure_only,
+            linear_eps: hyper_param.linear.eps,
+            linear_c: hyper_param.linear.c,
+            linear_weight_threshold: hyper_param.linear.weight_threshold,
+            linear_max_iter: hyper_param.linear.max_iter,
+            cluster_k: hyper_param.cluster.k,
+            cluster_balanced: hyper_param.cluster.balanced,
+            cluster_eps: hyper_param.cluster.eps,
+            cluster_min_size: hyper_param.cluster.min_size,
+            tree_structure_only: hyper_param.tree_structure_only,
         }
     }
 }
@@ -223,6 +225,7 @@ impl TryInto<omikuji::model::TrainHyperParam> for HyperParam {
         hyper_param.min_branch_size = self.min_branch_size;
         hyper_param.max_depth = self.max_depth;
         hyper_param.centroid_threshold = self.centroid_threshold;
+        hyper_param.collapse_every_n_layers = self.collapse_every_n_layers;
         hyper_param.tree_structure_only = self.tree_structure_only;
 
         hyper_param.linear.loss_type = match self.linear_loss_type {
