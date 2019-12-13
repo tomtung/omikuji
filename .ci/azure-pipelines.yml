@@ -47,6 +47,8 @@ stages:
               python.version: 3.6
             Python3.7:
               python.version: 3.7
+            Python3.8:
+              python.version: 3.8
         steps:
           - template: azure-python-build.yml
             parameters:
@@ -74,5 +76,7 @@ stages:
               python.version: 3.6
             Python3.7:
               python.version: 3.7
+            Python3.8:
+              python.version: 3.8
         steps:
           - template: azure-python-build.yml
