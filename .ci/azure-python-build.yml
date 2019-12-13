@@ -13,6 +13,12 @@ steps:
     displayName: 'Choose default Python binary'
     condition: and(succeeded(), ne(${{ parameters.manylinux }}, 'true'), ne(variables['Agent.OS'], 'Darwin'))
 
+  - script: |
+      SET
+      dir "C:\Program Files (x86)\Microsoft SDKs\Windows\v7.1A\"
+    displayName: 'Show all env vars'
+    condition: and(succeeded(), ne(${{ parameters.manylinux }}, 'true'), ne(variables['Agent.OS'], 'Darwin'))
+
   - bash: |
       set -e
 
