@@ -14,7 +14,7 @@ steps:
     condition: and(succeeded(), ne(${{ parameters.manylinux }}, 'true'), ne(variables['Agent.OS'], 'Darwin'))
 
   - bash: |
-      set -e -x
+      set -e
 
       case $(python.version) in
       3.5)
@@ -33,7 +33,7 @@ steps:
     condition: and(succeeded(), eq(${{ parameters.manylinux }}, 'true'))
 
   - bash: |
-      set -e -x
+      set -e
 
       case $(python.version) in
       3.5)
@@ -63,59 +63,48 @@ steps:
     condition: and(succeeded(), eq(variables['Agent.OS'], 'Darwin'))
 
   - bash: |
-      set -e -x
-      PYBIN=`echo "$(pybin)" | tr -d "'"`  # workaround for https://github.com/microsoft/azure-pipelines-tasks/issues/10331
-
-      which "$PYBIN"
-      "$PYBIN" -c "import sys; print(sys.version)"
+      set -e
+      which "$(pybin)"
+      "$(pybin)" -c "import sys; print(sys.version)"
     displayName: 'Query Python version'
 
   - bash: |
-      set -e -x
-      PYBIN=`echo "$(pybin)" | tr -d "'"`
-
-      "$PYBIN" -m pip -vvv install --user --upgrade pip
-      "$PYBIN" -m pip -vvv install --user --upgrade "wheel>=0.31.0,<0.32" "setuptools>=38.6.0" twine milksnake
-      "$PYBIN" -m pip --version
-      "$PYBIN" -m wheel version
-      "$PYBIN" -m twine --version
+      set -e
+      "$(pybin)" -m pip -vvv install --user --upgrade pip
+      "$(pybin)" -m pip -vvv install --user --upgrade "wheel>=0.31.0,<0.32" "setuptools>=38.6.0" twine milksnake
+      "$(pybin)" -m pip --version
+      "$(pybin)" -m wheel version
+      "$(pybin)" -m twine --version
     displayName: 'Install dev dependencies'
 
   - bash: |
-      set -e -x
-      PYBIN=`echo "$(pybin)" | tr -d "'"`
-
-      "$PYBIN" -m pip install --user black
-      "$PYBIN" -m black --check -t py35 ./
+      set -e
+      "$(pybin)" -m pip install --user black
+      "$(pybin)" -m black --check -t py35 ./
     displayName: 'Check Python code format'
     condition: ne(variables['python.version'], '3.5')
 
   - bash: |
-      PYBIN=`echo "$(pybin)" | tr -d "'"`
-      "$PYBIN" setup.py sdist
+      "$(pybin)" setup.py sdist
     displayName: 'Build source distribution'
     condition: and(succeeded(), eq(${{ parameters.sdist }}, 'true'))
 
   - template: azure-setup-rust.yml
 
   - bash: |
-      PYBIN=`echo "$(pybin)" | tr -d "'"`
-      "$PYBIN" -m pip -vvv install --user dist/*
+      "$(pybin)" -m pip -vvv install --user dist/*
     displayName: 'Test install from source distribution'
     condition: and(succeeded(), eq(${{ parameters.sdist }}, 'true'))
 
   - bash: |
-      set -e -x
-      PYBIN=`echo "$(pybin)" | tr -d "'"`
-
-      "$PYBIN" -m pip -vvv wheel . -w wheelhouse/
+      set -e
+      "$(pybin)" -m pip -vvv wheel . -w wheelhouse/
       ls -lh wheelhouse/
     displayName: 'Build wheels'
     condition: and(succeeded(), ne(${{ parameters.sdist }}, 'true'))
 
   - bash: |
-      set -e -x
-
+      set -e
       for whl in wheelhouse/$(package_name)-*.whl; do
         auditwheel repair "$whl" -w wheelhouse/
       done
@@ -124,10 +113,8 @@ steps:
     condition: and(succeeded(), eq(${{ parameters.manylinux }}, 'true'), ne(${{ parameters.sdist }}, 'true'))
 
   - bash: |
-      set -e -x
-      PYBIN=`echo "$(pybin)" | tr -d "'"`
-
-      "$PYBIN" -m pip install --user delocate
+      set -e
+      "$(pybin)" -m pip install --user delocate
       delocate-wheel --version
       delocate-wheel wheelhouse/$(package_name)-*.whl
       ls -lh wheelhouse/
@@ -135,36 +122,30 @@ steps:
     condition: and(succeeded(), ne(${{ parameters.sdist }}, 'true'), eq(variables['Agent.OS'], 'Darwin'))
 
   - bash: |
-      set -e -x
-      PYBIN=`echo "$(pybin)" | tr -d "'"`
-
-      "$PYBIN" -m pip install $(package_name) --no-index -f wheelhouse/  --user
-      "$PYBIN" -c "import sys; sys.path.remove(''); import $(package_name); print('Installed version: ' + $(package_name).__version__)"
-      "$PYBIN" -m pip uninstall -y $(package_name)
+      set -e
+      "$(pybin)" -m pip install $(package_name) --no-index -f wheelhouse/  --user
+      "$(pybin)" -c "import sys; sys.path.remove(''); import $(package_name); print('Installed version: ' + $(package_name).__version__)"
+      "$(pybin)" -m pip uninstall -y $(package_name)
     displayName: 'Test installing wheels'
     condition: and(succeeded(), ne(${{ parameters.sdist }}, 'true'))
 
   - bash: |
-      set -e -x
-
+      set -e
       mkdir -p dist
       cp wheelhouse/$(package_name)*.whl dist/
     displayName: 'Prepare wheels for publish'
     condition: and(succeeded(), ne(${{ parameters.sdist }}, 'true'), ne(${{ parameters.manylinux }}, 'true'))
 
   - bash: |
-      set -e -x
-
+      set -e
       mkdir -p dist
       cp wheelhouse/$(package_name)*manylinux*.whl dist/
     displayName: 'Prepare wheels for publish (manylinux)'
     condition: and(succeeded(), ne(${{ parameters.sdist }}, 'true'), eq(${{ parameters.manylinux }}, 'true'))
 
   - bash: |
-      set -e -x
-      PYBIN=`echo "$(pybin)" | tr -d "'"`
-
-      "$PYBIN" -m twine check dist/*
+      set -e
+      "$(pybin)" -m twine check dist/*
     displayName: 'Check artifacts with twine'
 
   - task: PublishPipelineArtifact@1
