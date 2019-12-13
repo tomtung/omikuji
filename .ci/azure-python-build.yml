@@ -26,6 +26,9 @@ steps:
       3.7)
         LANG_ABI_VER="cp37-cp37m"
         ;;
+      3.8)
+        LANG_ABI_VER="cp38-cp38"
+        ;;
       esac
 
       echo "##vso[task.setvariable variable=pybin;]/opt/python/${LANG_ABI_VER}/bin/python"
@@ -46,6 +49,10 @@ steps:
         ;;
       3.7)
         FULL_VERSION=3.7.4
+        MACOS_VERSION=10.9
+        ;;
+      3.8)
+        FULL_VERSION=3.8.0
         MACOS_VERSION=10.9
         ;;
       esac
