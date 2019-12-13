@@ -4,6 +4,7 @@ use rand::prelude::*;
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::f32::{INFINITY, NEG_INFINITY};
+use std::iter::FromIterator;
 use std::ops::Deref;
 
 /// The loss function used by liblinear model.

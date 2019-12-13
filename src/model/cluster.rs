@@ -180,9 +180,9 @@ fn calculate_similarities_to_centroids<N: Float, I: SpIndex, Iptr: SpIndex>(
     mut similarities: ArrayViewMut2<N>,
 ) {
     debug_assert!(feature_matrix.is_csr());
-    debug_assert_eq!(similarities.rows(), feature_matrix.rows());
-    debug_assert_eq!(centroids.rows(), feature_matrix.cols());
-    debug_assert_eq!(similarities.cols(), centroids.cols());
+    debug_assert_eq!(similarities.nrows(), feature_matrix.rows());
+    debug_assert_eq!(centroids.nrows(), feature_matrix.cols());
+    debug_assert_eq!(similarities.ncols(), centroids.ncols());
 
     similarities.fill(N::zero());
     csr_mulacc_dense_colmaj(
@@ -196,8 +196,8 @@ fn kmeans_update_partitions<N>(similarities: ArrayView2<N>, partitions: &mut [us
 where
     N: Float + Display,
 {
-    debug_assert_eq!(similarities.rows(), partitions.len());
-    assert!(similarities.cols() > 0);
+    debug_assert_eq!(similarities.nrows(), partitions.len());
+    assert!(similarities.ncols() > 0);
 
     for (s, p) in similarities
         .axis_iter(Axis(0))
@@ -212,12 +212,12 @@ fn balanced_kmeans_update_partitions<N>(similarities: ArrayView2<N>, partitions:
 where
     N: Float + Display,
 {
-    debug_assert_eq!(similarities.rows(), partitions.len());
+    debug_assert_eq!(similarities.nrows(), partitions.len());
 
     // Make a copy because we'll be making modifications
     let mut similarities = similarities.to_owned();
 
-    let k_clusters = similarities.cols();
+    let k_clusters = similarities.ncols();
     assert!(k_clusters > 0);
 
     let max_cluster_size = ((partitions.len() as f64) / (k_clusters as f64)).ceil() as usize;
@@ -232,7 +232,7 @@ where
         k_clusters
     ];
 
-    for i in 0..similarities.rows() {
+    for i in 0..similarities.nrows() {
         let mut j = i;
         loop {
             let (s, p) = find_max(similarities.row(j)).unwrap();
@@ -260,8 +260,8 @@ fn balanced_2means_update_partitions<N>(similarities: ArrayView2<N>, partitions:
 where
     N: Float + Display,
 {
-    debug_assert_eq!(similarities.rows(), partitions.len());
-    debug_assert_eq!(similarities.cols(), 2);
+    debug_assert_eq!(similarities.nrows(), partitions.len());
+    debug_assert_eq!(similarities.ncols(), 2);
 
     let mut diff_index_pairs = similarities
         .axis_iter(Axis(0))
@@ -293,12 +293,12 @@ fn update_centroids<N, I, Iptr>(
     N: Float + AddAssign + DivAssign + ScalarOperand,
 {
     debug_assert_eq!(feature_matrix.rows(), partitions.len());
-    debug_assert_eq!(feature_matrix.cols(), centroids.rows());
+    debug_assert_eq!(feature_matrix.cols(), centroids.nrows());
 
     // Update centroids for next iteration
     centroids.fill(N::zero());
     for (i, &p) in partitions.iter().enumerate() {
-        debug_assert!(p < centroids.cols());
+        debug_assert!(p < centroids.ncols());
 
         // Update centroid
         dense_add_assign_csvec(
