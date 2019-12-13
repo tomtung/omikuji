@@ -14,7 +14,7 @@ class Model(object):
     """A Omikuji model object."""
 
     def __init__(self, model_ptr):
-        """For internal use only. To get model objects, call load or Trainer.train_on_data instead."""
+        """For internal use only. To get model objects, call load or train_on_data instead."""
         assert model_ptr != ffi.NULL
         self._model_ptr = ffi.gc(model_ptr, lib.free_omikuji_model)
 
