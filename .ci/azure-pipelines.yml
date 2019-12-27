@@ -59,9 +59,12 @@ stages:
           vmImage: 'vs2017-win2016'
         strategy:
           matrix:
-            # Not building for 3.6 & 3.7, because linking fails for some reason ¯\_(ツ)_/¯
             Python3.5:
               python.version: 3.5
+            Python3.6:
+              python.version: 3.6
+            Python3.7:
+              python.version: 3.7
         steps:
           - template: azure-python-build.yml
 

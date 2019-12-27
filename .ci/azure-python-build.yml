@@ -7,11 +7,18 @@ steps:
     inputs:
       versionSpec: '$(python.version)'
       architecture: '$(python.architecture)'
-    condition: and(succeeded(), ne(${{ parameters.manylinux }}, 'true'), ne(variables['Agent.OS'], 'Darwin'))
 
   - bash: echo "##vso[task.setvariable variable=pybin;]python"
     displayName: 'Choose default Python binary'
-    condition: and(succeeded(), ne(${{ parameters.manylinux }}, 'true'), ne(variables['Agent.OS'], 'Darwin'))
+    condition: succeeded()
+
+  - task: BatchScript@1
+    displayName: 'VsDevCmd.bat'
+    inputs:
+      filename: C:\\Program Files (x86)\\Microsoft Visual Studio\\2017\\Enterprise\\Common7\\Tools\\VsDevCmd.bat
+      arguments: -no_logo -arch=x64
+      modifyEnvironment: true
+    condition: and(succeeded(), eq(variables['Agent.OS'], 'Windows_NT'))
 
   - bash: |
       set -e
@@ -66,7 +73,7 @@ steps:
       PYBIN=/usr/local/bin/python$(python.version)
       curl https://bootstrap.pypa.io/get-pip.py | "$PYBIN"
       echo "##vso[task.setvariable variable=pybin]$PYBIN"
-    displayName: 'Install Python for Mac'
+    displayName: 'Install & Choose Python for Mac'
     condition: and(succeeded(), eq(variables['Agent.OS'], 'Darwin'))
 
   - bash: |
@@ -103,10 +110,8 @@ steps:
     displayName: 'Test install from source distribution'
     condition: and(succeeded(), eq(${{ parameters.sdist }}, 'true'))
 
-  - bash: |
-      set -e
+  - script: |
       "$(pybin)" -m pip -vvv wheel . -w wheelhouse/
-      ls -lh wheelhouse/
     displayName: 'Build wheels'
     condition: and(succeeded(), ne(${{ parameters.sdist }}, 'true'))
 
@@ -130,6 +135,7 @@ steps:
 
   - bash: |
       set -e
+      ls -lh wheelhouse/
       "$(pybin)" -m pip install $(package_name) --no-index -f wheelhouse/  --user
       "$(pybin)" -c "import sys; sys.path.remove(''); import $(package_name); print('Installed version: ' + $(package_name).__version__)"
       "$(pybin)" -m pip uninstall -y $(package_name)
