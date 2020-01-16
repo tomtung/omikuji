@@ -3,6 +3,7 @@ __all__ = ["Model", "LossType"]
 
 from ._libomikuji import lib, ffi
 from enum import Enum
+from typing import Optional
 
 
 class LossType(Enum):
@@ -13,17 +14,33 @@ class LossType(Enum):
 class Model(object):
     """A Omikuji model object."""
 
-    def __init__(self, model_ptr):
+    def __init__(self, model_ptr, predict_thread_pool_ptr=ffi.NULL):
         """For internal use only. To get model objects, call load or train_on_data instead."""
         assert model_ptr != ffi.NULL
         self._model_ptr = ffi.gc(model_ptr, lib.free_omikuji_model)
+        self._predict_thread_pool_ptr = predict_thread_pool_ptr
 
     @classmethod
-    def load(cls, path: str, max_sparse_density: float = 0.1):
+    def _init_thread_pool(cls, n_threads: Optional[int]):
+        if n_threads is None:
+            return ffi.NULL
+
+        n_threads = max(n_threads, 0)
+        thread_pool_ptr = lib.init_omikuji_thread_pool(n_threads)
+        return ffi.gc(thread_pool_ptr, lib.free_omikuji_thread_pool)
+
+    def init_prediction_thread_pool(self, n_threads: int):
+        """Initialize the thread pool for processing model prediction.
+
+        Omikuji uses Rayon for parallelization. If this method is not called, the global Rayon thread pool is used.
+
+        """
+        self._predict_thread_pool_ptr = self._init_thread_pool(n_threads)
+
+    @classmethod
+    def load(cls, path: str):
         """Load Omikuji model from the given directory."""
-        model_ptr = lib.load_omikuji_model(
-            ffi.new("char[]", path.encode()), max_sparse_density
-        )
+        model_ptr = lib.load_omikuji_model(ffi.new("char[]", path.encode()))
         if model_ptr == ffi.NULL:
             raise RuntimeError("Failed to load model from %s" % (path,))
 
@@ -43,10 +60,22 @@ class Model(object):
         ):
             raise RuntimeError("Failed to save model to %s" % (path,))
 
-    def densify_weights(self, max_sparse_density: float = 0.1):
-        """Densify model weights to speed up prediction at the cost of more memory usage."""
+    def densify_weights(
+        self, max_sparse_density: float = 0.1, n_threads: Optional[int] = None
+    ):
+        """Densify model weights to speed up prediction at the cost of more memory usage.
+
+        Note that this method is NOT thread-safe. The caller is responsible for making sure that no other method call is
+        happening at the same time.
+
+        """
         assert self._model_ptr != ffi.NULL
-        lib.densify_omikuji_model(self._model_ptr, max_sparse_density)
+        thread_pool_ptr = (
+            self._predict_thread_pool_ptr
+            if n_threads is None
+            else self._init_thread_pool(n_threads)
+        )
+        lib.densify_omikuji_model(self._model_ptr, max_sparse_density, thread_pool_ptr)
 
     def predict(self, feature_value_pairs, beam_size=10, top_k=10):
         """Make predictions with Omikuji model."""
@@ -76,6 +105,7 @@ class Model(object):
             top_k,
             output_labels,
             output_scores,
+            self._predict_thread_pool_ptr,
         )
         output = []
         for i in range(top_k):
@@ -89,10 +119,13 @@ class Model(object):
         return lib.omikuji_default_hyper_param()
 
     @classmethod
-    def train_on_data(cls, data_path: str, hyper_param=None, n_threads=0):
+    def train_on_data(
+        cls, data_path: str, hyper_param=None, n_threads: Optional[int] = None
+    ):
         """Train a model with the given data and hyper-parameters."""
+        thread_pool_ptr = cls._init_thread_pool(n_threads)
         dataset_ptr = lib.load_omikuji_data_set(
-            ffi.new("char[]", data_path.encode()), n_threads
+            ffi.new("char[]", data_path.encode()), thread_pool_ptr
         )
         if dataset_ptr == ffi.NULL:
             raise RuntimeError("Failed to load data from %s" % (data_path,))
@@ -102,7 +135,7 @@ class Model(object):
         if hyper_param is None:
             hyper_param = cls.default_hyper_param()
 
-        model_ptr = lib.train_omikuji_model(dataset_ptr, hyper_param, n_threads)
+        model_ptr = lib.train_omikuji_model(dataset_ptr, hyper_param, thread_pool_ptr)
         if model_ptr == ffi.NULL:
             raise RuntimeError("Failed to train model")
 
