@@ -77,13 +77,13 @@ steps:
     condition: and(succeeded(), eq(variables['Agent.OS'], 'Darwin'))
 
   - bash: |
-      set -e
+      set -e -x
       which "$(pybin)"
       "$(pybin)" -c "import sys; print(sys.version)"
     displayName: 'Query Python version'
 
   - bash: |
-      set -e
+      set -e -x
       "$(pybin)" -m pip -vvv install --user --upgrade pip
       "$(pybin)" -m pip -vvv install --user --upgrade "wheel>=0.31.0,<0.32" "setuptools>=38.6.0" twine milksnake
       "$(pybin)" -m pip --version
@@ -92,7 +92,7 @@ steps:
     displayName: 'Install dev dependencies'
 
   - bash: |
-      set -e
+      set -e -x
       "$(pybin)" -m pip install --user black
       "$(pybin)" -m black --check -t py35 ./
     displayName: 'Check Python code format'
@@ -116,7 +116,7 @@ steps:
     condition: and(succeeded(), ne(${{ parameters.sdist }}, 'true'))
 
   - bash: |
-      set -e
+      set -e -x
       for whl in wheelhouse/$(package_name)-*.whl; do
         auditwheel repair "$whl" -w wheelhouse/
       done
@@ -125,7 +125,7 @@ steps:
     condition: and(succeeded(), eq(${{ parameters.manylinux }}, 'true'), ne(${{ parameters.sdist }}, 'true'))
 
   - bash: |
-      set -e
+      set -e -x
       "$(pybin)" -m pip install --user delocate
       delocate-wheel --version
       delocate-wheel wheelhouse/$(package_name)-*.whl
@@ -134,30 +134,35 @@ steps:
     condition: and(succeeded(), ne(${{ parameters.sdist }}, 'true'), eq(variables['Agent.OS'], 'Darwin'))
 
   - bash: |
-      set -e
+      set -e -x
       ls -lh wheelhouse/
+
       "$(pybin)" -m pip install $(package_name) --no-index -f wheelhouse/  --user
       "$(pybin)" -c "import sys; sys.path.remove(''); import $(package_name); print('Installed version: ' + $(package_name).__version__)"
+
+      cd examples
+      "$(pybin)" run_py.py
+
       "$(pybin)" -m pip uninstall -y $(package_name)
-    displayName: 'Test installing wheels'
+    displayName: 'Test installing wheels and run examples'
     condition: and(succeeded(), ne(${{ parameters.sdist }}, 'true'))
 
   - bash: |
-      set -e
+      set -e -x
       mkdir -p dist
       cp wheelhouse/$(package_name)*.whl dist/
     displayName: 'Prepare wheels for publish'
     condition: and(succeeded(), ne(${{ parameters.sdist }}, 'true'), ne(${{ parameters.manylinux }}, 'true'))
 
   - bash: |
-      set -e
+      set -e -x
       mkdir -p dist
       cp wheelhouse/$(package_name)*manylinux*.whl dist/
     displayName: 'Prepare wheels for publish (manylinux)'
     condition: and(succeeded(), ne(${{ parameters.sdist }}, 'true'), eq(${{ parameters.manylinux }}, 'true'))
 
   - bash: |
-      set -e
+      set -e -x
       "$(pybin)" -m twine check dist/*
     displayName: 'Check artifacts with twine'
 
