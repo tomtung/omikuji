@@ -127,6 +127,14 @@ pub unsafe extern "C" fn omikuji_n_features(model_ptr: *const Model) -> size_t {
     (*model_ptr).n_features()
 }
 
+/// The number of trees in the forest model.
+#[no_mangle]
+pub unsafe extern "C" fn omikuji_n_trees(model_ptr: *const Model) -> size_t {
+    assert!(!model_ptr.is_null(), "Model should not be null");
+    let model_ptr = model_ptr as *const c_void as *const omikuji::Model;
+    (*model_ptr).n_trees()
+}
+
 /// Make predictions with omikuji model.
 #[no_mangle]
 pub unsafe extern "C" fn omikuji_predict(

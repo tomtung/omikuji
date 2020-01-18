@@ -71,6 +71,11 @@ impl Model {
         self.settings.n_features
     }
 
+    /// The number of trees in the forest model.
+    pub fn n_trees(&self) -> usize {
+        self.trees.len()
+    }
+
     /// Prepare the feature vector in both dense and sparse forms to make prediction more efficient.
     fn prepare_feature_vec(&self, sparse_vec: &[(Index, f32)]) -> SparseVec {
         let norm = sparse_vec

@@ -74,6 +74,11 @@ class Model:
         """Get the expected dimension of feature vectors."""
         return lib.omikuji_n_features(self._model_ptr)
 
+    @property
+    def n_trees(self):
+        """The number of trees in the forest model."""
+        return lib.omikuji_n_trees(self._model_ptr)
+
     def save(self, path):
         """Save Omikuji model to the given directory."""
         assert self._model_ptr != ffi.NULL
