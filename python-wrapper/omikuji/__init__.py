@@ -40,7 +40,11 @@ class Model:
     """A Omikuji model object."""
 
     def __init__(self, model_ptr, thread_pool: Optional[_ThreadPoolHandle] = None):
-        """For internal use only. To get model objects, call load or train_on_data instead."""
+        """Constructor for internal use only.
+
+        To get model objects, call load or train_on_data instead.
+
+        """
         assert model_ptr != ffi.NULL
         self._model_ptr = ffi.gc(model_ptr, lib.free_omikuji_model)
         self._thread_pool = thread_pool if thread_pool else _ThreadPoolHandle()
@@ -50,8 +54,8 @@ class Model:
 
         If n_threads is set to 0, the number of threads if automatically chosen.
 
-        Omikuji uses Rayon for parallelization. If this method is not called, a thread pool
-        is initialized when it's first used.
+        Omikuji uses Rayon for parallelization. If this method is not called, a thread
+        pool is initialized when it's first used.
 
         """
         self._thread_pool = _ThreadPoolHandle(n_threads, initialize=True)
@@ -82,10 +86,10 @@ class Model:
     def densify_weights(
         self, max_sparse_density: float = 0.1, n_threads: Optional[int] = None
     ):
-        """Densify model weights to speed up prediction at the cost of more memory usage.
+        """Densify model weights to speed up prediction at the expense of memory usage.
 
-        Note that this method is NOT thread-safe. The caller is responsible for making sure that no other method call is
-        happening at the same time.
+        Note that this method is NOT thread-safe. The caller is responsible for making
+        sure that no other method call is happening at the same time.
 
         """
         assert self._model_ptr != ffi.NULL
