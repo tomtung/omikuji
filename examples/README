@@ -1,0 +1,3 @@
+This folder contains some simple scripts that demonstrates the usage of the omikuji CLI binary as well as the Python module. These scripts are also used as simple integration tests during continuous integration.
+
+The EURLex-4K dataset used for testing here. For details see the Extreme Classification Repository: http://manikvarma.org/downloads/XC/XMLRepository.html

@@ -8,7 +8,7 @@ variables:
 stages:
   - stage: Rust
     jobs:
-      - job: CargoTest
+      - job: RustBuild
         pool:
           vmImage: 'ubuntu-latest'
         steps:
@@ -22,6 +22,16 @@ stages:
               cd c-api
               cargo fmt --all -- --check
               cargo test
+            displayName: 'Cargo test'
+          - script: |
+              set -e -x
+
+              cargo install --path . --features cli
+              omikuji --help
+
+              cd examples
+              bash run_cli.sh
+            displayName: 'Run example'
 
   - stage: Python
     jobs:
