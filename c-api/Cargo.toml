@@ -1,6 +1,6 @@
 [package]
 name = "omikuji_c-api"
-version = "0.3.0"
+version = "0.3.1"
 edition = "2018"
 authors = ["Tom Dong <tom.tung.dyb@gmail.com>"]
 
@@ -11,7 +11,7 @@ crate-type = ["staticlib", "cdylib"]
 [dependencies]
 itertools = "0.8"
 libc = "0.2"
-omikuji = { version = "0.3.0", path = ".." }
+omikuji = { path = ".." }
 rayon = "1.2"
 simple_logger = "1.3"
 
