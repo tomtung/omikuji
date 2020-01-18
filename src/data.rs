@@ -5,7 +5,7 @@ use log::info;
 use rayon::prelude::*;
 use std::fs;
 use std::io::{Error, ErrorKind, Result};
-use time;
+use std::time;
 
 /// A training dataset loaded in memory.
 #[derive(Clone)]
@@ -90,7 +90,7 @@ impl DataSet {
     /// Load a data file from the Extreme Classification Repository
     pub fn load_xc_repo_data_file(path: &str) -> Result<Self> {
         info!("Loading data from {}", path);
-        let start_t = time::precise_time_s();
+        let start_t = time::Instant::now();
 
         let file_content = fs::read_to_string(path)?;
         info!("Parsing data");
@@ -150,7 +150,7 @@ impl DataSet {
         info!(
             "Loaded {} examples; it took {:.2}s",
             n_examples,
-            time::precise_time_s() - start_t
+            start_t.elapsed().as_secs_f32()
         );
         Ok(Self {
             n_features,

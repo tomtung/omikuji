@@ -5,6 +5,7 @@ use itertools::izip;
 use log::info;
 use rayon::prelude::*;
 use std::sync::Mutex;
+use std::time;
 
 fn precision_at_k(
     max_k: usize,
@@ -35,7 +36,7 @@ pub fn test_all(
 ) -> (Vec<IndexValueVec>, Vec<f32>) {
     let n_examples = test_dataset.feature_lists.len();
     let pb = Mutex::new(create_progress_bar(n_examples as u64));
-    let start_t = time::precise_time_s();
+    let start_t = time::Instant::now();
     let predicted_labels = test_dataset
         .feature_lists
         .par_iter()
@@ -48,7 +49,7 @@ pub fn test_all(
     info!(
         "Done testing on {} examples; it took {:.2}s",
         n_examples,
-        time::precise_time_s() - start_t
+        start_t.elapsed().as_secs_f32()
     );
 
     let precisions = precision_at_k(5, &test_dataset.label_sets, &predicted_labels);

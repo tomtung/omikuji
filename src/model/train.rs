@@ -10,6 +10,7 @@ use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::iter::FromIterator;
 use std::sync::{Arc, Mutex};
+use std::time;
 
 /// Model training hyper-parameters.
 #[derive(Copy, Clone, Debug, Serialize, Deserialize)]
@@ -77,7 +78,7 @@ impl HyperParam {
         let n_features = dataset.n_features;
 
         info!("Training model with hyper-parameters {:?}", self);
-        let start_t = time::precise_time_s();
+        let start_t = time::Instant::now();
 
         info!("Initializing tree trainer");
         let trainer = TreeTrainer::initialize(dataset, *self);
@@ -90,7 +91,7 @@ impl HyperParam {
 
         info!(
             "Model training complete; it took {:.2}s",
-            time::precise_time_s() - start_t
+            start_t.elapsed().as_secs_f32()
         );
         Model {
             trees,

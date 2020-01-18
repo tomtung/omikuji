@@ -14,6 +14,7 @@ use serde::{Deserialize, Serialize};
 use std::cmp::Reverse;
 use std::io;
 use std::mem::swap;
+use std::time;
 
 /// Model training hyper-parameters.
 pub type TrainHyperParam = train::HyperParam;
@@ -93,7 +94,7 @@ impl Model {
     /// Serialize model into the directory with the given path.
     pub fn save<P: AsRef<std::path::Path>>(&self, dir_path: P) -> io::Result<()> {
         info!("Saving model...");
-        let start_t = time::precise_time_s();
+        let start_t = time::Instant::now();
 
         let dir_path = dir_path.as_ref();
         if !dir_path.exists() {
@@ -157,7 +158,7 @@ impl Model {
 
         info!(
             "Model saved; it took {:.2}s",
-            time::precise_time_s() - start_t
+            start_t.elapsed().as_secs_f32()
         );
         Ok(())
     }
@@ -165,7 +166,7 @@ impl Model {
     /// Deserialize model from the given directory.
     pub fn load<P: AsRef<std::path::Path>>(dir_path: P) -> io::Result<Self> {
         info!("Loading model...");
-        let start_t = time::precise_time_s();
+        let start_t = time::Instant::now();
 
         let dir_path = dir_path.as_ref();
         let settings = {
@@ -206,7 +207,7 @@ impl Model {
 
         info!(
             "Model loaded; it took {:.2}s",
-            time::precise_time_s() - start_t
+            start_t.elapsed().as_secs_f32()
         );
         Ok(Self { settings, trees })
     }
@@ -214,7 +215,7 @@ impl Model {
     /// Densify model weights to speed up prediction at the cost of more memory usage.
     pub fn densify_weights(&mut self, max_sparse_density: f32) {
         info!("Densifying model weights...");
-        let start_t = time::precise_time_s();
+        let start_t = time::Instant::now();
 
         self.trees
             .par_iter_mut()
@@ -222,7 +223,7 @@ impl Model {
 
         info!(
             "Model weights densified; it took {:.2}s",
-            time::precise_time_s() - start_t
+            start_t.elapsed().as_secs_f32()
         );
     }
 }

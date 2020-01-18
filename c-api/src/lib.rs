@@ -1,5 +1,6 @@
 use itertools::Itertools;
 use libc::size_t;
+use omikuji::rayon;
 use std::convert::TryInto;
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_float, c_void};

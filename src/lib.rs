@@ -15,3 +15,5 @@ pub mod data;
 mod mat_util;
 pub mod model;
 mod util;
+
+pub use rayon; // Re-export Rayon for downstream parallelization control
