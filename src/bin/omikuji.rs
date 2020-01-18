@@ -115,6 +115,7 @@ fn main() {
     let default_cluster_min_size = default_hyperparam.cluster.min_size.to_string();
 
     let arg_matches = clap::App::new("omikuji")
+        .version(clap::crate_version!())
         .about("Omikuji: an efficient implementation of Partitioned Label Trees and its variations \
                 for extreme multi-label classification")
         .subcommand(
