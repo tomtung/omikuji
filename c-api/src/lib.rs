@@ -224,6 +224,7 @@ pub struct HyperParam {
     pub centroid_threshold: f32,
     pub collapse_every_n_layers: size_t,
     pub tree_structure_only: bool,
+    pub train_trees_1_by_1: bool,
     pub linear_loss_type: LossType,
     pub linear_eps: c_float,
     pub linear_c: c_float,
@@ -256,6 +257,7 @@ impl From<omikuji::model::TrainHyperParam> for HyperParam {
             cluster_eps: hyper_param.cluster.eps,
             cluster_min_size: hyper_param.cluster.min_size,
             tree_structure_only: hyper_param.tree_structure_only,
+            train_trees_1_by_1: hyper_param.train_trees_1_by_1,
         }
     }
 }

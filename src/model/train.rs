@@ -23,6 +23,7 @@ pub struct HyperParam {
     pub linear: liblinear::HyperParam,
     pub cluster: cluster::HyperParam,
     pub tree_structure_only: bool,
+    pub train_trees_1_by_1: bool,
 }
 
 impl Default for HyperParam {
@@ -36,6 +37,7 @@ impl Default for HyperParam {
             linear: liblinear::HyperParam::default(),
             cluster: cluster::HyperParam::default(),
             tree_structure_only: false,
+            train_trees_1_by_1: false,
         }
     }
 }
@@ -84,10 +86,23 @@ impl HyperParam {
         let trainer = TreeTrainer::initialize(dataset, *self);
 
         info!("Start training forest");
-        let trees: Vec<_> = (0..self.n_trees)
-            .into_par_iter()
-            .map(|_| trainer.train())
-            .collect();
+        let trees = if !self.train_trees_1_by_1 {
+            (0..self.n_trees)
+                .into_par_iter()
+                .map(|_| trainer.train())
+                .collect()
+        } else {
+            let mut trees = Vec::with_capacity(self.n_trees);
+            for i in 1..=self.n_trees {
+                trainer
+                    .progress_bar
+                    .lock()
+                    .unwrap()
+                    .message(&format!("[Tree {}/{}] ", i, self.n_trees));
+                trees.push(trainer.train());
+            }
+            trees
+        };
 
         info!(
             "Model training complete; it took {:.2}s",

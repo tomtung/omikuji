@@ -24,6 +24,7 @@ fn parse_train_hyper_param(matches: &clap::ArgMatches) -> omikuji::model::TrainH
     hyper_param.collapse_every_n_layers =
         value_t!(matches, "collapse_every_n_layers", usize).unwrap();
     hyper_param.tree_structure_only = matches.occurrences_of("tree_structure_only") > 0;
+    hyper_param.train_trees_1_by_1 = matches.occurrences_of("train_trees_1_by_1") > 0;
 
     hyper_param.linear.loss_type = match matches.value_of("linear.loss").unwrap() {
         "hinge" => omikuji::model::liblinear::LossType::Hinge,
@@ -192,6 +193,13 @@ fn main() {
                         .long("tree_structure_only")
                         .help("Build the trees without training classifiers; \
                                   useful when a downstream user needs the tree structures only")
+                        .takes_value(false)
+                )
+                .arg(
+                    clap::Arg::with_name("train_trees_1_by_1")
+                        .long("train_trees_1_by_1")
+                        .help("Finish training each tree before start training the next; \
+                                  limits initial parallelization but saves memory")
                         .takes_value(false)
                 )
                 .arg(

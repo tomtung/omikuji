@@ -159,6 +159,8 @@ USAGE:
 FLAGS:
         --cluster.unbalanced     Perform regular k-means clustering instead of balanced k-means clustering
     -h, --help                   Prints help information
+        --train_trees_1_by_1     Finish training each tree before start training the next; limits initial
+                                 parallelization but saves memory
         --tree_structure_only    Build the trees without training classifiers; useful when a downstream user needs the
                                  tree structures only
     -V, --version                Prints version information
