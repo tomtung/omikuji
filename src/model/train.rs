@@ -121,6 +121,7 @@ impl TreeTrainer {
             .feature_lists
             .par_iter_mut()
             .for_each(|v| v.l2_normalize());
+
         // Initialize label clusters
         let all_labels = Arc::new(LabelCluster::new_from_dataset(
             &dataset,
@@ -404,9 +405,13 @@ impl LabelCluster {
         dataset: &DataSet,
         threshold: f32,
     ) -> (Vec<Index>, Vec<IndexValueVec>) {
+        info!("Computing label centroids");
         let mut label_to_feature_to_sum =
             HashMap::<Index, HashMap<Index, f32>>::with_capacity(dataset.n_labels);
+        let mut pb = create_progress_bar(dataset.feature_lists.len() as u64);
+        pb.message("Examples ");
         for (features, labels) in izip!(&dataset.feature_lists, &dataset.label_sets) {
+            pb.inc();
             for &label in labels {
                 let feature_to_sum = label_to_feature_to_sum.entry(label).or_default();
                 for &(feature, value) in features {
@@ -415,9 +420,12 @@ impl LabelCluster {
             }
         }
 
+        let mut pb = create_progress_bar(label_to_feature_to_sum.len() as u64);
+        pb.message("Labels ");
         label_to_feature_to_sum
             .into_iter()
             .map(|(label, feature_to_sum)| {
+                pb.inc();
                 let mut v = feature_to_sum.into_iter().collect_vec();
                 v.l2_normalize();
                 v.prune_with_threshold(threshold);
