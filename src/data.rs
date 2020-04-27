@@ -119,7 +119,7 @@ impl DataSet {
                     "Failed to parse number of features",
                 ))
             })?;
-            let n_labels = tokens[1].parse::<usize>().or_else(|_| {
+            let n_labels = tokens[2].parse::<usize>().or_else(|_| {
                 Err(Error::new(
                     ErrorKind::InvalidData,
                     "Failed to parse number of labels",
