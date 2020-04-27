@@ -9,13 +9,13 @@ name = "omikuji"
 crate-type = ["staticlib", "cdylib"]
 
 [dependencies]
-itertools = "0.8.*"
+itertools = "0.9.*"
 libc = "0.2.*"
 omikuji = { path = ".." }
-simple_logger = "1.5.*"
+simple_logger = "1.6.*"
 
 [build-dependencies]
-cbindgen = "0.13.*"
+cbindgen = "0.14.*"
 
 [profile.release]
 panic = "abort"
