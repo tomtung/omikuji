@@ -37,7 +37,7 @@ stages:
     jobs:
       - job: SDist
         pool:
-          vmImage: 'ubuntu-16.04'
+          vmImage: 'ubuntu-latest'
         variables:
           python.version: 3.7
         steps:
@@ -47,7 +47,7 @@ stages:
 
       - job: manylinux
         pool:
-          vmImage: 'ubuntu-16.04'
+          vmImage: 'ubuntu-latest'
         container: 'quay.io/pypa/manylinux2010_x86_64:latest'
         strategy:
           matrix:
