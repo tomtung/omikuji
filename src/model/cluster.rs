@@ -7,7 +7,7 @@ use ordered_float::NotNan;
 use rand::prelude::*;
 use serde::{Deserialize, Serialize};
 use sprs::prod::csr_mulacc_dense_colmaj;
-use sprs::{CsMatViewI, SpIndex};
+use sprs::{CsMatViewI, SpIndex, MulAcc};
 use std::cmp::Reverse;
 use std::fmt::Display;
 use std::iter::Sum;
@@ -55,7 +55,7 @@ impl HyperParam {
     where
         I: SpIndex,
         Iptr: SpIndex,
-        N: Float + AddAssign + DivAssign + ScalarOperand + Display + Sum,
+        N: Float + AddAssign + DivAssign + ScalarOperand + Display + Sum + MulAcc,
     {
         assert!(feature_matrix.is_csr());
 
@@ -174,7 +174,7 @@ where
     centroids
 }
 
-fn calculate_similarities_to_centroids<N: Float, I: SpIndex, Iptr: SpIndex>(
+fn calculate_similarities_to_centroids<N: Float + MulAcc, I: SpIndex, Iptr: SpIndex>(
     feature_matrix: &CsMatViewI<N, I, Iptr>,
     centroids: ArrayView2<N>,
     mut similarities: ArrayViewMut2<N>,

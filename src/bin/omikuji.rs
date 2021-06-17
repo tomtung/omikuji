@@ -5,6 +5,7 @@ extern crate rayon;
 use clap::value_t;
 use std::fs::File;
 use std::io::{BufWriter, Write};
+use simple_logger::SimpleLogger;
 
 fn set_num_threads(matches: &clap::ArgMatches) {
     rayon::ThreadPoolBuilder::new()
@@ -99,7 +100,7 @@ fn test(matches: &clap::ArgMatches) {
 }
 
 fn main() {
-    simple_logger::init().unwrap();
+    SimpleLogger::new().init().unwrap();
 
     let default_hyperparam = omikuji::model::train::HyperParam::default();
     let default_n_trees = default_hyperparam.n_trees.to_string();
