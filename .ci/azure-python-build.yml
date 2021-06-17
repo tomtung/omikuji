@@ -24,9 +24,6 @@ steps:
       set -e
 
       case $(python.version) in
-      3.5)
-        LANG_ABI_VER="cp35-cp35m"
-        ;;
       3.6)
         LANG_ABI_VER="cp36-cp36m"
         ;;
@@ -35,6 +32,9 @@ steps:
         ;;
       3.8)
         LANG_ABI_VER="cp38-cp38"
+        ;;
+      3.9)
+        LANG_ABI_VER="cp39-cp39"
         ;;
       esac
 
@@ -46,10 +46,6 @@ steps:
       set -e
 
       case $(python.version) in
-      3.5)
-        FULL_VERSION=3.5.4
-        MACOS_VERSION=10.6
-        ;;
       3.6)
         FULL_VERSION=3.6.8
         MACOS_VERSION=10.9
@@ -60,6 +56,10 @@ steps:
         ;;
       3.8)
         FULL_VERSION=3.8.0
+        MACOS_VERSION=10.9
+        ;;
+      3.9)
+        FULL_VERSION=3.9.4
         MACOS_VERSION=10.9
         ;;
       esac
@@ -94,9 +94,8 @@ steps:
   - bash: |
       set -e -x
       "$(pybin)" -m pip install --user black
-      "$(pybin)" -m black --check -t py35 ./
+      "$(pybin)" -m black --check ./
     displayName: 'Check Python code format'
-    condition: ne(variables['python.version'], '3.5')
 
   - bash: |
       "$(pybin)" setup.py sdist

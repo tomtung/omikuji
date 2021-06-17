@@ -51,14 +51,14 @@ stages:
         container: 'quay.io/pypa/manylinux2010_x86_64:latest'
         strategy:
           matrix:
-            Python3.5:
-              python.version: 3.5
             Python3.6:
               python.version: 3.6
             Python3.7:
               python.version: 3.7
             Python3.8:
               python.version: 3.8
+            Python3.9:
+              python.version: 3.9
         steps:
           - template: azure-python-build.yml
             parameters:
@@ -69,12 +69,14 @@ stages:
           vmImage: 'vs2017-win2016'
         strategy:
           matrix:
-            Python3.5:
-              python.version: 3.5
             Python3.6:
               python.version: 3.6
             Python3.7:
               python.version: 3.7
+            Python3.8:
+              python.version: 3.8
+            Python3.9:
+              python.version: 3.9
         steps:
           - template: azure-python-build.yml
 
@@ -83,13 +85,13 @@ stages:
           vmImage: 'macOS-10.14'
         strategy:
           matrix:
-            Python3.5:
-              python.version: 3.5
             Python3.6:
               python.version: 3.6
             Python3.7:
               python.version: 3.7
             Python3.8:
               python.version: 3.8
+            Python3.9:
+              python.version: 3.9
         steps:
           - template: azure-python-build.yml
