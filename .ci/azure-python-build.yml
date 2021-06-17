@@ -85,7 +85,7 @@ steps:
   - bash: |
       set -e -x
       "$(pybin)" -m pip -vvv install --user --upgrade pip
-      "$(pybin)" -m pip -vvv install --user --upgrade "wheel>=0.31.0,<0.32" "setuptools>=38.6.0" twine milksnake
+      "$(pybin)" -m pip -vvv install --user --upgrade wheel "setuptools>=38.6.0" twine milksnake
       "$(pybin)" -m pip --version
       "$(pybin)" -m wheel version
       "$(pybin)" -m twine --version
