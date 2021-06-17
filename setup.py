@@ -37,7 +37,7 @@ setup(
     ),
     long_description=load_readme(),
     long_description_content_type="text/markdown",
-    python_requires=">=3.5",
+    python_requires=">=3.6",
     url="https://github.com/tomtung/omikuji",
     license="MIT",
     packages=["omikuji"],
