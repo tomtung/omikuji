@@ -7,7 +7,7 @@ use ordered_float::NotNan;
 use rand::prelude::*;
 use serde::{Deserialize, Serialize};
 use sprs::prod::csr_mulacc_dense_colmaj;
-use sprs::{CsMatViewI, SpIndex, MulAcc};
+use sprs::{CsMatViewI, MulAcc, SpIndex};
 use std::cmp::Reverse;
 use std::fmt::Display;
 use std::iter::Sum;

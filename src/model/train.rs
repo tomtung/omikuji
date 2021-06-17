@@ -8,7 +8,6 @@ use itertools::{izip, Itertools};
 use log::info;
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
-use std::iter::FromIterator;
 use std::sync::{Arc, Mutex};
 use std::time;
 
@@ -366,7 +365,7 @@ impl TrainingExamples {
     }
 
     fn find_examples_with_labels(&self, labels: &[Index]) -> Vec<usize> {
-        let labels = IndexSet::from_iter(labels.iter().cloned());
+        let labels: IndexSet = labels.iter().cloned().collect();
         self.label_sets
             .par_iter()
             .enumerate()

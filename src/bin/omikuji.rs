@@ -3,9 +3,9 @@ extern crate omikuji;
 extern crate rayon;
 
 use clap::value_t;
+use simple_logger::SimpleLogger;
 use std::fs::File;
 use std::io::{BufWriter, Write};
-use simple_logger::SimpleLogger;
 
 fn set_num_threads(matches: &clap::ArgMatches) {
     rayon::ThreadPoolBuilder::new()
@@ -16,33 +16,16 @@ fn set_num_threads(matches: &clap::ArgMatches) {
 }
 
 fn parse_train_hyper_param(matches: &clap::ArgMatches) -> omikuji::model::TrainHyperParam {
-    let mut hyper_param = omikuji::model::train::HyperParam::default();
-
-    hyper_param.n_trees = value_t!(matches, "n_trees", usize).unwrap();
-    hyper_param.min_branch_size = value_t!(matches, "min_branch_size", usize).unwrap();
-    hyper_param.max_depth = value_t!(matches, "max_depth", usize).unwrap();
-    hyper_param.centroid_threshold = value_t!(matches, "centroid_threshold", f32).unwrap();
-    hyper_param.collapse_every_n_layers =
-        value_t!(matches, "collapse_every_n_layers", usize).unwrap();
-    hyper_param.tree_structure_only = matches.occurrences_of("tree_structure_only") > 0;
-    hyper_param.train_trees_1_by_1 = matches.occurrences_of("train_trees_1_by_1") > 0;
-
-    hyper_param.linear.loss_type = match matches.value_of("linear.loss").unwrap() {
-        "hinge" => omikuji::model::liblinear::LossType::Hinge,
-        "log" => omikuji::model::liblinear::LossType::Log,
-        _ => unreachable!(),
+    let hyper_param = omikuji::model::train::HyperParam {
+        n_trees: value_t!(matches, "n_trees", usize).unwrap(),
+        min_branch_size: value_t!(matches, "min_branch_size", usize).unwrap(),
+        max_depth: value_t!(matches, "max_depth", usize).unwrap(),
+        centroid_threshold: value_t!(matches, "centroid_threshold", f32).unwrap(),
+        collapse_every_n_layers: value_t!(matches, "collapse_every_n_layers", usize).unwrap(),
+        tree_structure_only: matches.is_present("tree_structure_only"),
+        train_trees_1_by_1: matches.is_present("train_trees_1_by_1"),
+        ..Default::default()
     };
-    hyper_param.linear.eps = value_t!(matches, "linear.eps", f32).unwrap();
-    hyper_param.linear.c = value_t!(matches, "linear.c", f32).unwrap();
-    hyper_param.linear.weight_threshold =
-        value_t!(matches, "linear.weight_threshold", f32).unwrap();
-    hyper_param.linear.max_iter = value_t!(matches, "linear.max_iter", u32).unwrap();
-
-    hyper_param.cluster.k = value_t!(matches, "cluster.k", usize).unwrap();
-    hyper_param.cluster.balanced = matches.occurrences_of("cluster.unbalanced") == 0;
-    hyper_param.cluster.eps = value_t!(matches, "cluster.eps", f32).unwrap();
-    hyper_param.cluster.min_size = value_t!(matches, "cluster.min_size", usize).unwrap();
-
     hyper_param.validate().unwrap();
     hyper_param
 }

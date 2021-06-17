@@ -4,7 +4,6 @@ use rand::prelude::*;
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::f32::{INFINITY, NEG_INFINITY};
-use std::iter::FromIterator;
 use std::ops::Deref;
 
 /// The loss function used by liblinear model.
@@ -147,17 +146,20 @@ pub(crate) fn predict(
     loss_type: LossType,
     feature_vec: &SparseVec,
 ) -> DenseVec {
-    DenseVec::from_iter(weights.iter().map(|w| {
-        if let Some(w) = w {
-            let score = w.dot(feature_vec);
-            match loss_type {
-                LossType::Log => -(-score).exp().ln_1p(),
-                LossType::Hinge => -(1. - score).max(0.).powi(2),
+    weights
+        .iter()
+        .map(|w| {
+            if let Some(w) = w {
+                let score = w.dot(feature_vec);
+                match loss_type {
+                    LossType::Log => -(-score).exp().ln_1p(),
+                    LossType::Hinge => -(1. - score).max(0.).powi(2),
+                }
+            } else {
+                0.
             }
-        } else {
-            0.
-        }
-    }))
+        })
+        .collect()
 }
 
 /// A coordinate descent solver for L2-loss SVM dual problems.
@@ -172,13 +174,13 @@ pub(crate) fn predict(
 ///  D is a diagonal matrix
 ///
 /// In L1-SVM case (omitted):
-/// 		upper_bound_i = Cp if y_i = 1
-/// 		upper_bound_i = Cn if y_i = -1
-/// 		D_ii = 0
+///         upper_bound_i = Cp if y_i = 1
+///         upper_bound_i = Cn if y_i = -1
+///         D_ii = 0
 /// In L2-SVM case:
-/// 		upper_bound_i = INF
-/// 		D_ii = 1/(2*Cp)	if y_i = 1
-/// 		D_ii = 1/(2*Cn)	if y_i = -1
+///         upper_bound_i = INF
+///         D_ii = 1/(2*Cp)    if y_i = 1
+///         D_ii = 1/(2*Cn)    if y_i = -1
 ///
 /// Given:
 /// x, y, Cp, Cn

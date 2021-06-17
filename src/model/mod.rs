@@ -214,7 +214,7 @@ impl Model {
             "Model loaded; it took {:.2}s",
             start_t.elapsed().as_secs_f32()
         );
-        Ok(Self { settings, trees })
+        Ok(Self { trees, settings })
     }
 
     /// Densify model weights to speed up prediction at the cost of more memory usage.
@@ -271,20 +271,14 @@ impl TreeNode {
     }
 
     fn is_leaf(&self) -> bool {
-        if let TreeNode::Leaf { .. } = self {
-            true
-        } else {
-            false
-        }
+        matches!(self, TreeNode::Leaf { .. })
     }
 
     fn densify_weights(&mut self, max_sparse_density: f32) {
         fn densify(weights: &mut [Option<Vector>], max_sparse_density: f32) {
-            for w in weights.iter_mut() {
-                if let Some(w) = w {
-                    if !w.is_dense() && w.density() > max_sparse_density {
-                        w.densify();
-                    }
+            for w in weights.iter_mut().flatten() {
+                if !w.is_dense() && w.density() > max_sparse_density {
+                    w.densify();
                 }
             }
         }
