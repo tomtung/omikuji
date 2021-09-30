@@ -22,6 +22,11 @@ pub struct ThreadPool {
 }
 
 /// Initialize a thread pool for later use.
+///
+/// # Safety
+/// The caller is responsible for freeing the returned pointer by calling
+/// [free_omikuji_thread_pool()].
+///
 #[no_mangle]
 pub unsafe extern "C" fn init_omikuji_thread_pool(n_threads: usize) -> *mut ThreadPool {
     let thread_pool = rayon::ThreadPoolBuilder::new()
@@ -33,6 +38,11 @@ pub unsafe extern "C" fn init_omikuji_thread_pool(n_threads: usize) -> *mut Thre
 }
 
 /// Free the thread pool object.
+///
+/// # Safety
+/// The input pointer must have been obtained by calling [init_omikuji_thread_pool()]. The caller
+/// is also responsible for ensuring not freeing the same pointer more than once.
+///
 #[no_mangle]
 pub unsafe extern "C" fn free_omikuji_thread_pool(ptr: *mut ThreadPool) {
     if !ptr.is_null() {
@@ -55,6 +65,11 @@ where
 }
 
 /// Load omikuji model from the given directory.
+///
+/// # Safety
+/// The path pointer must point to a valid C string.
+/// The caller is responsible for freeing the returned pointer by calling [free_omikuji_model()].
+///
 #[no_mangle]
 pub unsafe extern "C" fn load_omikuji_model(path: *const c_char) -> *mut Model {
     assert!(!path.is_null(), "Path should not be null");
@@ -75,6 +90,11 @@ pub unsafe extern "C" fn load_omikuji_model(path: *const c_char) -> *mut Model {
 }
 
 /// Save omikuji model to the given directory.
+///
+/// # Safety
+/// The input model pointer must have been obtained by calling [load_omikuji_model()] or
+/// [train_omikuji_model()]. The path pointer must point to a valid C string.
+///
 #[no_mangle]
 pub unsafe extern "C" fn save_omikuji_model(model_ptr: *mut Model, path: *const c_char) -> i8 {
     assert!(!model_ptr.is_null(), "Model should not be null");
@@ -97,6 +117,12 @@ pub unsafe extern "C" fn save_omikuji_model(model_ptr: *mut Model, path: *const 
 }
 
 /// Free omikuji model from memory.
+///
+/// # Safety
+/// The input model pointer must have been obtained by calling [load_omikuji_model()] or
+/// [train_omikuji_model()]. The caller is also responsible for ensuring not freeing the same
+/// pointer more than once.
+///
 #[no_mangle]
 pub unsafe extern "C" fn free_omikuji_model(model_ptr: *mut Model) {
     if !model_ptr.is_null() {
@@ -106,6 +132,12 @@ pub unsafe extern "C" fn free_omikuji_model(model_ptr: *mut Model) {
 }
 
 /// Densify model weights to speed up prediction at the cost of more memory usage.
+///
+/// # Safety
+/// The model pointer must have been obtained by calling [load_omikuji_model()] or
+/// [train_omikuji_model()]. The thread pool pointer must have been obtained by calling
+/// [init_omikuji_thread_pool()].
+///
 #[no_mangle]
 pub unsafe extern "C" fn densify_omikuji_model(
     model_ptr: *mut Model,
@@ -120,6 +152,11 @@ pub unsafe extern "C" fn densify_omikuji_model(
 }
 
 /// Get the expected dimension of feature vectors.
+///
+/// # Safety
+/// The model pointer must have been obtained by calling [load_omikuji_model()] or
+/// [train_omikuji_model()].
+///
 #[no_mangle]
 pub unsafe extern "C" fn omikuji_n_features(model_ptr: *const Model) -> size_t {
     assert!(!model_ptr.is_null(), "Model should not be null");
@@ -128,6 +165,11 @@ pub unsafe extern "C" fn omikuji_n_features(model_ptr: *const Model) -> size_t {
 }
 
 /// The number of trees in the forest model.
+///
+/// # Safety
+/// The model pointer must have been obtained by calling [load_omikuji_model()] or
+/// [train_omikuji_model()].
+///
 #[no_mangle]
 pub unsafe extern "C" fn omikuji_n_trees(model_ptr: *const Model) -> size_t {
     assert!(!model_ptr.is_null(), "Model should not be null");
@@ -136,6 +178,13 @@ pub unsafe extern "C" fn omikuji_n_trees(model_ptr: *const Model) -> size_t {
 }
 
 /// Make predictions with omikuji model.
+///
+/// # Safety
+/// The model pointer must have been obtained by calling [load_omikuji_model()] or
+/// [train_omikuji_model()]. The thread pool pointer must have been obtained by calling
+/// [init_omikuji_thread_pool()]. [feature_indices], [feature_values], [output_labels], and
+/// [output_scores] must point to valid arrays of their respective type.
+///
 #[no_mangle]
 pub unsafe extern "C" fn omikuji_predict(
     model_ptr: *const Model,
@@ -176,6 +225,12 @@ pub unsafe extern "C" fn omikuji_predict(
 }
 
 /// Load a data file from the Extreme Classification Repository.
+///
+/// # Safety
+/// The thread pool pointer must have been obtained by calling [init_omikuji_thread_pool()].
+/// The path pointer must point to a valid C string. The caller is responsible for freeing
+/// the returned pointer by calling [free_omikuji_data_set()].
+///
 #[no_mangle]
 pub unsafe extern "C" fn load_omikuji_data_set(
     path: *const c_char,
@@ -200,6 +255,11 @@ pub unsafe extern "C" fn load_omikuji_data_set(
 }
 
 /// Free data set object.
+///
+/// # Safety
+/// The input pointer must have been obtained by calling [load_omikuji_data_set()]. The caller
+/// is also responsible for ensuring not freeing the same pointer more than once.
+///
 #[no_mangle]
 pub unsafe extern "C" fn free_omikuji_data_set(dataset_ptr: *mut DataSet) {
     if !dataset_ptr.is_null() {
@@ -266,27 +326,31 @@ impl TryInto<omikuji::model::TrainHyperParam> for HyperParam {
     type Error = String;
 
     fn try_into(self) -> Result<omikuji::model::TrainHyperParam, Self::Error> {
-        let mut hyper_param = omikuji::model::train::HyperParam::default();
-        hyper_param.n_trees = self.n_trees;
-        hyper_param.min_branch_size = self.min_branch_size;
-        hyper_param.max_depth = self.max_depth;
-        hyper_param.centroid_threshold = self.centroid_threshold;
-        hyper_param.collapse_every_n_layers = self.collapse_every_n_layers;
-        hyper_param.tree_structure_only = self.tree_structure_only;
-
-        hyper_param.linear.loss_type = match self.linear_loss_type {
-            LossType::Hinge => omikuji::model::liblinear::LossType::Hinge,
-            LossType::Log => omikuji::model::liblinear::LossType::Log,
+        let hyper_param = omikuji::model::train::HyperParam {
+            n_trees: self.n_trees,
+            min_branch_size: self.min_branch_size,
+            max_depth: self.max_depth,
+            centroid_threshold: self.centroid_threshold,
+            collapse_every_n_layers: self.collapse_every_n_layers,
+            tree_structure_only: self.tree_structure_only,
+            train_trees_1_by_1: self.train_trees_1_by_1,
+            linear: omikuji::model::liblinear::HyperParam {
+                loss_type: match self.linear_loss_type {
+                    LossType::Hinge => omikuji::model::liblinear::LossType::Hinge,
+                    LossType::Log => omikuji::model::liblinear::LossType::Log,
+                },
+                eps: self.linear_eps,
+                c: self.linear_c,
+                weight_threshold: self.linear_weight_threshold,
+                max_iter: self.linear_max_iter,
+            },
+            cluster: omikuji::model::cluster::HyperParam {
+                k: self.cluster_k,
+                balanced: self.cluster_balanced,
+                eps: self.cluster_eps,
+                min_size: self.cluster_min_size,
+            },
         };
-        hyper_param.linear.eps = self.linear_eps;
-        hyper_param.linear.c = self.linear_c;
-        hyper_param.linear.weight_threshold = self.linear_weight_threshold;
-        hyper_param.linear.max_iter = self.linear_max_iter;
-
-        hyper_param.cluster.k = self.cluster_k;
-        hyper_param.cluster.balanced = self.cluster_balanced;
-        hyper_param.cluster.eps = self.cluster_eps;
-        hyper_param.cluster.min_size = self.cluster_min_size;
 
         if let Err(msg) = hyper_param.validate() {
             Err(msg)
@@ -303,6 +367,12 @@ pub extern "C" fn omikuji_default_hyper_param() -> HyperParam {
 }
 
 /// Train omikuji model on the given data set and hyper-parameters.
+///
+/// # Safety
+/// The dataset pointer must have been obtained by calling [load_omikuji_data_set()].
+/// The thread pool pointer must have been obtained by calling [init_omikuji_thread_pool()].
+/// The caller is responsible for freeing the returned pointer by calling [free_omikuji_model()].
+///
 #[no_mangle]
 pub unsafe extern "C" fn train_omikuji_model(
     dataset_ptr: *const DataSet,

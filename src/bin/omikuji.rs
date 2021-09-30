@@ -321,9 +321,9 @@ fn main() {
         .get_matches();
 
     if let Some(arg_matches) = arg_matches.subcommand_matches("train") {
-        train(&arg_matches);
+        train(arg_matches);
     } else if let Some(arg_matches) = arg_matches.subcommand_matches("test") {
-        test(&arg_matches);
+        test(arg_matches);
     } else {
         println!("{}", arg_matches.usage());
     }

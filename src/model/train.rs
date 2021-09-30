@@ -380,7 +380,7 @@ impl TrainingExamples {
     }
 
     fn take_examples_by_indices(&self, indices: &[usize]) -> Self {
-        let new_feature_matrix = self.feature_matrix.copy_outer_dims(&indices);
+        let new_feature_matrix = self.feature_matrix.copy_outer_dims(indices);
         let new_label_sets = indices
             .iter()
             .map(|&i| self.label_sets[i].clone())
@@ -406,7 +406,7 @@ impl LabelCluster {
     }
 
     fn new_from_dataset(dataset: &DataSet, centroid_threshold: f32) -> Self {
-        let (labels, label_centroids) = Self::compute_label_centroids(&dataset, centroid_threshold);
+        let (labels, label_centroids) = Self::compute_label_centroids(dataset, centroid_threshold);
         let label_centroids =
             csrmat_from_index_value_pair_lists(label_centroids, dataset.n_features);
         Self::new(labels, label_centroids)

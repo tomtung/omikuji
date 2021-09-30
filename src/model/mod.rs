@@ -1,4 +1,4 @@
-mod cluster;
+pub mod cluster;
 pub mod eval;
 pub mod liblinear;
 pub mod train;
@@ -311,7 +311,7 @@ impl TreeNode {
         let mut curr_level = Vec::<(&TreeNode, f32)>::with_capacity(beam_size * 2);
         let mut next_level = Vec::<(&TreeNode, f32)>::with_capacity(beam_size * 2);
 
-        curr_level.push((&self, 0.));
+        curr_level.push((self, 0.));
 
         // Iterate until only leaves are left
         while curr_level.iter().any(|(node, _)| !node.is_leaf()) {
@@ -323,8 +323,7 @@ impl TreeNode {
                         let mut child_scores =
                             liblinear::predict(weights, classifier_loss_type, feature_vec);
                         child_scores += node_score;
-                        next_level
-                            .extend(children.iter().zip_eq(child_scores.into_iter()));
+                        next_level.extend(children.iter().zip_eq(child_scores.into_iter()));
                     }
                     TreeNode::Leaf { .. } => {
                         next_level.push((node, node_score));
