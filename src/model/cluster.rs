@@ -157,7 +157,7 @@ where
     let mut centroids = Array2::zeros((feature_matrix.cols(), k).f());
     for (i, c) in izip!(
         rand::seq::index::sample(&mut thread_rng(), feature_matrix.rows(), k).into_iter(),
-        centroids.gencolumns_mut()
+        centroids.columns_mut()
     ) {
         dense_add_assign_csvec(
             c,
@@ -315,7 +315,7 @@ fn update_centroids<N, I, Iptr>(
     centroids.iter().for_each(|s| assert!(!s.is_nan()));
     // Normalize to get the new centroids
     centroids
-        .gencolumns_mut()
+        .columns_mut()
         .into_iter()
         .for_each(dense_vec_l2_normalize);
 }
