@@ -531,6 +531,43 @@ impl LilMat {
         self.assign_to_dense(dense_mat.view_mut());
         dense_mat
     }
+
+    /// Compute dot product with a sparse vector using binary search on column indices.
+    pub fn dot_csvec(&self, vec: SparseVecView) -> DenseVec {
+        use sprs::SparseMat;
+        assert_eq!(
+            self.cols(),
+            vec.dim(),
+            "Dimension mismatch: {} != {}",
+            self.cols(),
+            vec.dim()
+        );
+        let mut out = DenseVec::zeros(self.rows());
+
+        let mut i = 0; // i marks the next matrix column index from which to binary search
+        for (col_idx, &val1) in vec.iter() {
+            // NB:
+            //  Since the binary search is done on the slice [i..], the returned index di is an
+            //  offset from i.
+            let (di, found) = match self.outer_inds[i..].binary_search(&Index::from_usize(col_idx))
+            {
+                Ok(di) => (di, true),
+                Err(di) => (di, false),
+            };
+            i += di;
+            if found {
+                let rng = self.indptr[i].index_unchecked()..self.indptr[i + 1].index_unchecked();
+                for (&row_idx, &val2) in self.inner_inds[rng.clone()]
+                    .iter()
+                    .zip(self.data[rng.clone()].iter())
+                {
+                    out[row_idx.index_unchecked()] += val1 * val2;
+                }
+            }
+        }
+
+        out
+    }
 }
 
 impl sprs::SparseMat for LilMat {
@@ -776,5 +813,29 @@ mod tests {
                 .to_dense()
             );
         }
+    }
+
+    #[test]
+    fn test_lil_math_dot_csvec() {
+        let csvec = SparseVec::new(5, vec![0, 2, 3, 4], vec![1., 2., 3., 4.]); // [1, 0, 2, 3, 4]
+        let mut mat = LilMat::new((4, 5));
+        assert_eq!(array![0., 0., 0., 0.], mat.dot_csvec(csvec.view()));
+
+        /*
+           [[0, 1, 0, 3, 0],
+           [2, 0, 0, 0, 0],
+           [0, 0, 0, 0, 0],
+           [0, 0, 4, 5, 0]]
+        */
+        mat.append_value(0, 1, 2.);
+        mat.append_value(1, 0, 1.);
+        mat.append_value(2, 3, 4.);
+        mat.append_value(3, 0, 3.);
+        mat.append_value(3, 3, 5.);
+
+        assert_eq!(
+            array![3. * 3., 2. * 1., 0., 4. * 2. + 5. * 3.,],
+            mat.dot_csvec(csvec.view())
+        );
     }
 }
