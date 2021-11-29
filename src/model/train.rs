@@ -292,7 +292,7 @@ impl TreeTrainer {
             self.classifier_hyper_param(examples.len())
                 .train(&examples.feature_matrix.view(), label_to_example_indices)
         } else {
-            WeightMat::Sparse(SparseMat::zero((
+            WeightMat::Sparse(LilMat::new((
                 label_to_example_indices.len(),
                 examples.feature_matrix.cols(),
             )))

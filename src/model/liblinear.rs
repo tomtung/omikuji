@@ -125,12 +125,7 @@ impl HyperParam {
             })
             .collect::<Vec<_>>();
 
-        let mut weights = {
-            let rows = weights.iter().map(|v| v.row_view::<usize>()).collect_vec();
-            let row_views = rows.iter().map(|r| r.view()).collect_vec();
-            let mat = sprs::vstack(&row_views);
-            WeightMat::Sparse(mat)
-        };
+        let mut weights = WeightMat::Sparse(LilMat::from_rows(&weights));
 
         if weights.density() > 0.5 {
             weights.densify();

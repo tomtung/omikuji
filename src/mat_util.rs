@@ -19,7 +19,7 @@ pub type DenseMatViewMut<'a> = ndarray::ArrayViewMut2<'a, f32>;
 /// A weight matrix, can be stored in either dense or sparse format.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum WeightMat {
-    Sparse(SparseMat),
+    Sparse(LilMat),
     Dense(DenseMat),
 }
 
@@ -28,7 +28,7 @@ impl WeightMat {
     pub fn dot_vec(&self, vec: SparseVecView) -> DenseVec {
         match self {
             Self::Dense(mat) => mat.outer_iter().map(|w| vec.dot_dense(w)).collect(),
-            Self::Sparse(mat) => sprs::prod::csr_mul_csvec(mat.view(), vec.view()).to_dense(),
+            Self::Sparse(mat) => mat.dot_csvec(vec),
         }
     }
 
