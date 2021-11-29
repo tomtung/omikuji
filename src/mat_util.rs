@@ -9,56 +9,63 @@ use std::fmt::Display;
 use std::ops::{AddAssign, Deref, DerefMut, DivAssign};
 
 pub type SparseVec = sprs::CsVecI<f32, Index>;
+pub type SparseVecView<'a> = sprs::CsVecViewI<'a, f32, Index>;
 pub type SparseMat = sprs::CsMatI<f32, Index, usize>;
 pub type SparseMatView<'a> = sprs::CsMatViewI<'a, f32, Index, usize>;
 pub type DenseVec = ndarray::Array1<f32>;
+pub type DenseMat = ndarray::Array2<f32>;
 
-/// A vector, can be either dense or sparse.
+/// A weight matrix, can be stored in either dense or sparse format.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub(crate) enum Vector {
-    Dense(Vec<f32>),
-    Sparse(SparseVec),
+pub enum WeightMat {
+    Sparse(SparseMat),
+    Dense(DenseMat),
 }
 
-impl Vector {
-    pub fn dim(&self) -> usize {
+impl WeightMat {
+    /// Compute the product between the matrix and a vector.
+    pub fn dot_vec(&self, vec: SparseVecView) -> DenseVec {
         match self {
-            Vector::Dense(this) => this.len(),
-            Vector::Sparse(this) => this.dim(),
+            Self::Dense(mat) => mat.outer_iter().map(|w| vec.dot_dense(w)).collect(),
+            Self::Sparse(mat) => sprs::prod::csr_mul_csvec(mat.view(), vec.view()).to_dense(),
         }
     }
 
-    pub fn dot(&self, that: &SparseVec) -> f32 {
+    /// Get the shape of the matrix.
+    pub fn shape(&self) -> sprs::Shape {
         match self {
-            Vector::Dense(this) => that.dot_dense(this),
-            Vector::Sparse(this) => that.dot(this),
+            Self::Dense(mat) => {
+                let shape = mat.shape();
+                assert!(shape.len() == 2);
+                (shape[0], shape[1])
+            }
+            Self::Sparse(mat) => mat.shape(),
         }
     }
 
+    /// Returns whether the matrix is dense.
     pub fn is_dense(&self) -> bool {
         match self {
-            Vector::Dense(_) => true,
-            Vector::Sparse(_) => false,
+            Self::Dense(_) => true,
+            Self::Sparse(_) => false,
         }
     }
 
+    /// Returns the ratio of non-zero elements in the matrix when it's sparse.
     pub fn density(&self) -> f32 {
         match self {
-            Vector::Dense(_) => 1.,
-            Vector::Sparse(v) => v.nnz() as f32 / v.dim() as f32,
+            Self::Dense(_) => 1.,
+            Self::Sparse(m) => m.density() as f32,
         }
     }
 
+    /// Store the matrix in dense format if it's not already so.
     pub fn densify(&mut self) {
         *self = match self {
-            Vector::Dense(_) => {
+            Self::Dense(_) => {
                 return; // Already dense, do nothing
             }
-            Vector::Sparse(sparse_v) => {
-                let mut dense_v = vec![0.0; sparse_v.dim()];
-                sparse_v.scatter(&mut dense_v);
-                Vector::Dense(dense_v)
-            }
+            Self::Sparse(m) => Self::Dense(m.to_dense()),
         };
     }
 }

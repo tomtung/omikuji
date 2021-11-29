@@ -79,7 +79,7 @@ impl HyperParam {
         &self,
         feature_matrix: &SparseMatView,
         label_to_example_indices: &[Indices],
-    ) -> Vec<Option<Vector>> {
+    ) -> WeightMat {
         self.validate().unwrap();
 
         assert!(feature_matrix.is_csr());
@@ -91,7 +91,7 @@ impl HyperParam {
             LossType::Hinge => solve_l2r_l2_svc,
             LossType::Log => solve_l2r_lr_dual,
         };
-        label_to_example_indices
+        let weights = label_to_example_indices
             .par_iter()
             .map(|indices| {
                 // For the current classifier, an example is positive iff its index is in the given list
@@ -102,64 +102,54 @@ impl HyperParam {
                     n_pos += 1;
                 }
                 assert_ne!(n_pos, 0);
-                // Don't train if all examples are positives
-                if n_pos == labels.len() {
-                    return None;
-                }
 
-                // Train the classifier
-                let mut w = {
-                    let (indices, data) = solver(
-                        &feature_matrix.view(),
-                        &labels,
-                        self.eps,
-                        self.c,
-                        self.c,
-                        self.max_iter,
-                    )
-                    .indexed_iter()
-                    .filter_map(|(index, &value)| {
-                        if value.abs() <= self.weight_threshold {
-                            None
-                        } else {
-                            Some((index_to_feature[index], value))
-                        }
-                    })
-                    .unzip();
+                let (indices, data) = solver(
+                    &feature_matrix.view(),
+                    &labels,
+                    self.eps,
+                    self.c,
+                    self.c,
+                    self.max_iter,
+                )
+                .indexed_iter()
+                .filter_map(|(index, &value)| {
+                    if value.abs() <= self.weight_threshold {
+                        None
+                    } else {
+                        Some((index_to_feature[index], value))
+                    }
+                })
+                .unzip();
 
-                    Vector::Sparse(SparseVec::new(n_features, indices, data))
-                };
-
-                // Only store in sparse format if density is lower than half to save space
-                if w.density() > 0.5 {
-                    w.densify();
-                }
-
-                Some(w)
+                SparseVec::new(n_features, indices, data)
             })
-            .collect()
+            .collect::<Vec<_>>();
+
+        let mut weights = {
+            let rows = weights.iter().map(|v| v.row_view::<usize>()).collect_vec();
+            let row_views = rows.iter().map(|r| r.view()).collect_vec();
+            let mat = sprs::vstack(&row_views);
+            WeightMat::Sparse(mat)
+        };
+
+        if weights.density() > 0.5 {
+            weights.densify();
+        }
+
+        weights
     }
 }
 
 pub(crate) fn predict(
-    weights: &[Option<Vector>],
+    weights: &WeightMat,
     loss_type: LossType,
     feature_vec: &SparseVec,
 ) -> DenseVec {
-    weights
-        .iter()
-        .map(|w| {
-            if let Some(w) = w {
-                let score = w.dot(feature_vec);
-                match loss_type {
-                    LossType::Log => -(-score).exp().ln_1p(),
-                    LossType::Hinge => -(1. - score).max(0.).powi(2),
-                }
-            } else {
-                0.
-            }
-        })
-        .collect()
+    let scores = weights.dot_vec(feature_vec.view());
+    match loss_type {
+        LossType::Log => scores.mapv(|score| -(-score).exp().ln_1p()),
+        LossType::Hinge => scores.mapv(|score| -(1. - score).max(0.).powi(2)),
+    }
 }
 
 /// A coordinate descent solver for L2-loss SVM dual problems.
