@@ -24,8 +24,25 @@ fn parse_train_hyper_param(matches: &clap::ArgMatches) -> omikuji::model::TrainH
         collapse_every_n_layers: value_t!(matches, "collapse_every_n_layers", usize).unwrap(),
         tree_structure_only: matches.is_present("tree_structure_only"),
         train_trees_1_by_1: matches.is_present("train_trees_1_by_1"),
-        ..Default::default()
+        linear: omikuji::model::liblinear::HyperParam {
+            loss_type: match matches.value_of("linear.loss").unwrap() {
+                "hinge" => omikuji::model::liblinear::LossType::Hinge,
+                "log" => omikuji::model::liblinear::LossType::Log,
+                _ => unreachable!(),
+            },
+            eps: value_t!(matches, "linear.eps", f32).unwrap(),
+            c: value_t!(matches, "linear.c", f32).unwrap(),
+            weight_threshold: value_t!(matches, "linear.weight_threshold", f32).unwrap(),
+            max_iter: value_t!(matches, "linear.max_iter", u32).unwrap(),
+        },
+        cluster: omikuji::model::cluster::HyperParam {
+            k: value_t!(matches, "cluster.k", usize).unwrap(),
+            balanced: matches.occurrences_of("cluster.unbalanced") == 0,
+            eps: value_t!(matches, "cluster.eps", f32).unwrap(),
+            min_size: value_t!(matches, "cluster.min_size", usize).unwrap(),
+        },
     };
+
     hyper_param.validate().unwrap();
     hyper_param
 }
