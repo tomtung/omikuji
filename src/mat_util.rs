@@ -69,6 +69,25 @@ impl WeightMat {
             Self::Sparse(m) => Self::Dense(m.to_dense()),
         };
     }
+
+    /// Create a new matrix from sparse row vectors.
+    ///
+    /// By default the matrix is only stored in dense format if it takes up less memory than using
+    /// the sparse format. One can call [`Self::densify()`] explicitly to force using the dense
+    /// format, e.g., to trade size for speed.
+    pub fn from_rows(row_vecs: &[SparseVec]) -> Self {
+        let mat = LilMat::from_rows(row_vecs);
+        let sparse_size = mat.mem_size();
+
+        let (rows, cols) = mat.shape();
+        let dense_size = std::mem::size_of::<f32>() * rows * cols;
+
+        if dense_size <= sparse_size {
+            Self::Dense(mat.to_dense())
+        } else {
+            Self::Sparse(mat)
+        }
+    }
 }
 
 pub trait IndexValuePairs<IndexT: SpIndex + Unsigned, ValueT: Copy>:
@@ -530,6 +549,14 @@ impl LilMat {
         let mut dense_mat = DenseMat::zeros(self.shape());
         self.assign_to_dense(dense_mat.view_mut());
         dense_mat
+    }
+
+    /// The size in memory in bytes.
+    pub fn mem_size(&self) -> usize {
+        std::mem::size_of_val(self.indptr.as_slice())
+            + std::mem::size_of_val(self.outer_inds.as_slice())
+            + std::mem::size_of_val(self.inner_inds.as_slice())
+            + std::mem::size_of_val(self.data.as_slice())
     }
 
     /// Compute dot product with a sparse vector using binary search on column indices.

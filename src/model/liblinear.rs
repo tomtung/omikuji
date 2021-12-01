@@ -125,13 +125,7 @@ impl HyperParam {
             })
             .collect::<Vec<_>>();
 
-        let mut weights = WeightMat::Sparse(LilMat::from_rows(&weights));
-
-        if weights.density() > 0.5 {
-            weights.densify();
-        }
-
-        weights
+        WeightMat::from_rows(&weights)
     }
 }
 
