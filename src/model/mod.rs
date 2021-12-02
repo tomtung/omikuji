@@ -323,7 +323,8 @@ impl TreeNode {
                         let mut child_scores =
                             liblinear::predict(weights, classifier_loss_type, feature_vec);
                         child_scores += node_score;
-                        next_level.extend(children.iter().zip_eq(child_scores.into_iter()));
+                        next_level
+                            .extend(children.iter().zip_eq(child_scores.into_iter().cloned()));
                     }
                     TreeNode::Leaf { .. } => {
                         next_level.push((node, node_score));
@@ -348,7 +349,7 @@ impl TreeNode {
                     labels
                         .iter()
                         .cloned()
-                        .zip_eq(label_scores.into_iter())
+                        .zip_eq(label_scores.into_iter().cloned())
                         .collect_vec()
                 }
                 _ => unreachable!(),

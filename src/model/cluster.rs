@@ -7,7 +7,7 @@ use ordered_float::NotNan;
 use rand::prelude::*;
 use serde::{Deserialize, Serialize};
 use sprs::prod::csr_mulacc_dense_colmaj;
-use sprs::{CsMatViewI, MulAcc, SpIndex};
+use sprs::{CsMatViewI, SpIndex};
 use std::cmp::Reverse;
 use std::fmt::Display;
 use std::iter::Sum;
@@ -55,7 +55,7 @@ impl HyperParam {
     where
         I: SpIndex,
         Iptr: SpIndex,
-        N: Float + AddAssign + DivAssign + ScalarOperand + Display + Sum + MulAcc,
+        N: Float + AddAssign + DivAssign + ScalarOperand + Display + Sum,
     {
         assert!(feature_matrix.is_csr());
 
@@ -157,7 +157,7 @@ where
     let mut centroids = Array2::zeros((feature_matrix.cols(), k).f());
     for (i, c) in izip!(
         rand::seq::index::sample(&mut thread_rng(), feature_matrix.rows(), k).into_iter(),
-        centroids.columns_mut()
+        centroids.gencolumns_mut()
     ) {
         dense_add_assign_csvec(
             c,
@@ -174,7 +174,7 @@ where
     centroids
 }
 
-fn calculate_similarities_to_centroids<N: Float + MulAcc, I: SpIndex, Iptr: SpIndex>(
+fn calculate_similarities_to_centroids<N: Float, I: SpIndex, Iptr: SpIndex>(
     feature_matrix: &CsMatViewI<N, I, Iptr>,
     centroids: ArrayView2<N>,
     mut similarities: ArrayViewMut2<N>,
@@ -315,7 +315,7 @@ fn update_centroids<N, I, Iptr>(
     centroids.iter().for_each(|s| assert!(!s.is_nan()));
     // Normalize to get the new centroids
     centroids
-        .columns_mut()
+        .gencolumns_mut()
         .into_iter()
         .for_each(dense_vec_l2_normalize);
 }
