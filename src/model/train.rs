@@ -298,7 +298,7 @@ impl TreeTrainer {
             )))
         };
 
-        assert_eq!(weights.shape().0, label_to_example_indices.len());
+        assert_eq!(weights.shape().1, label_to_example_indices.len());
         self.progress_bar
             .lock()
             .expect("Failed to lock progress bar")

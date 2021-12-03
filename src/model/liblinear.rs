@@ -134,7 +134,7 @@ pub(crate) fn predict(
     loss_type: LossType,
     feature_vec: &SparseVec,
 ) -> DenseVec {
-    let scores = weights.dot_vec(feature_vec.view());
+    let scores = weights.t_dot_vec(feature_vec.view());
     match loss_type {
         LossType::Log => scores.mapv(|score| -(-score).exp().ln_1p()),
         LossType::Hinge => scores.mapv(|score| -(1. - score).max(0.).powi(2)),

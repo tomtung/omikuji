@@ -252,13 +252,13 @@ impl TreeNode {
                 ref weights,
                 ref children,
             } => {
-                weights.shape() == (children.len(), settings.n_features + 1)
+                weights.shape() == (settings.n_features + 1, children.len())
                     && children.iter().all(|c| c.is_valid(settings))
             }
             TreeNode::Leaf {
                 ref weights,
                 ref labels,
-            } => weights.shape() == (labels.len(), settings.n_features + 1),
+            } => weights.shape() == (settings.n_features + 1, labels.len()),
         }
     }
 
