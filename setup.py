@@ -28,7 +28,7 @@ def load_readme():
 
 setup(
     name="omikuji",
-    version="0.3.3",
+    version="0.3.4",
     author="Tom Dong",
     author_email="tom.tung.dyb@gmail.com",
     description=(
@@ -54,6 +54,7 @@ setup(
         "Programming Language :: Python :: 3.6",
         "Programming Language :: Python :: 3.7",
         "Programming Language :: Python :: 3.8",
+        "Programming Language :: Python :: 3.9",
         "Programming Language :: Python :: Implementation :: CPython",
         "Programming Language :: Rust",
         "License :: OSI Approved :: MIT License",
