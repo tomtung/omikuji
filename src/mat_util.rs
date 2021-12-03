@@ -383,7 +383,7 @@ where
 pub struct LilMat {
     outer_dim: usize,
     inner_dim: usize,
-    indptr: Vec<Index>,
+    indptr: Vec<usize>,
     outer_inds: Vec<Index>,
     inner_inds: Vec<Index>,
     data: Vec<f32>,
