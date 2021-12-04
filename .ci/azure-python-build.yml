@@ -15,7 +15,7 @@ steps:
   - task: BatchScript@1
     displayName: 'VsDevCmd.bat'
     inputs:
-      filename: C:\\Program Files (x86)\\Microsoft Visual Studio\\2017\\Enterprise\\Common7\\Tools\\VsDevCmd.bat
+      filename: C:\\Program Files (x86)\\Microsoft Visual Studio\\2019\\Enterprise\\Common7\\Tools\\VsDevCmd.bat
       arguments: -no_logo -arch=x64
       modifyEnvironment: true
     condition: and(succeeded(), eq(variables['Agent.OS'], 'Windows_NT'))
@@ -48,23 +48,19 @@ steps:
       case $(python.version) in
       3.6)
         FULL_VERSION=3.6.8
-        MACOS_VERSION=10.9
         ;;
       3.7)
-        FULL_VERSION=3.7.4
-        MACOS_VERSION=10.9
+        FULL_VERSION=3.7.9
         ;;
       3.8)
-        FULL_VERSION=3.8.0
-        MACOS_VERSION=10.9
+        FULL_VERSION=3.8.10
         ;;
       3.9)
-        FULL_VERSION=3.9.4
-        MACOS_VERSION=10.9
+        FULL_VERSION=3.9.9
         ;;
       esac
 
-      INSTALLER_NAME=python-$FULL_VERSION-macosx$MACOS_VERSION.pkg
+      INSTALLER_NAME=python-$FULL_VERSION-macosx10.9.pkg
       curl https://www.python.org/ftp/python/$FULL_VERSION/$INSTALLER_NAME --output $INSTALLER_NAME
       sudo installer -pkg $INSTALLER_NAME -target /
 
