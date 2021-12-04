@@ -1,0 +1,35 @@
+name: Rust
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: Format
+      run: |
+        cargo fmt --all -- --check
+        cargo fmt --all --manifest-path=./c-api/Cargo.toml -- --check
+    - name: Build
+      run: |
+        cargo build --all-features
+        cargo build --all-features --manifest-path=./c-api/Cargo.toml
+    - name: Run tests
+      run: |
+        cargo test --all-features
+        cargo test --all-features --manifest-path=./c-api/Cargo.toml
+    - name: Run examples
+      run: |
+        cargo install --path . --all-features
+        cd examples
+        bash run_cli.sh
