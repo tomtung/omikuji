@@ -236,37 +236,29 @@ impl Model {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 enum TreeNode {
     Branch {
-        weights: Vec<Option<Vector>>,
+        weights: WeightMat,
         children: Vec<TreeNode>,
     },
     Leaf {
-        weights: Vec<Option<Vector>>,
+        weights: WeightMat,
         labels: Vec<Index>,
     },
 }
 
 impl TreeNode {
     fn is_valid(&self, settings: Settings) -> bool {
-        let is_weight_vec_valid = |w: &Option<Vector>| {
-            if let Some(ref v) = w {
-                v.dim() == settings.n_features + 1 // +1 because it includes bias
-            } else {
-                true
-            }
-        };
         match self {
             TreeNode::Branch {
                 ref weights,
                 ref children,
             } => {
-                weights.len() == children.len()
-                    && weights.iter().all(is_weight_vec_valid)
+                weights.shape() == (settings.n_features + 1, children.len())
                     && children.iter().all(|c| c.is_valid(settings))
             }
             TreeNode::Leaf {
                 ref weights,
                 ref labels,
-            } => weights.len() == labels.len() && weights.iter().all(is_weight_vec_valid),
+            } => weights.shape() == (settings.n_features + 1, labels.len()),
         }
     }
 
@@ -275,11 +267,9 @@ impl TreeNode {
     }
 
     fn densify_weights(&mut self, max_sparse_density: f32) {
-        fn densify(weights: &mut [Option<Vector>], max_sparse_density: f32) {
-            for w in weights.iter_mut().flatten() {
-                if !w.is_dense() && w.density() > max_sparse_density {
-                    w.densify();
-                }
+        fn densify(weights: &mut WeightMat, max_sparse_density: f32) {
+            if !weights.is_dense() && weights.density() > max_sparse_density {
+                weights.densify();
             }
         }
 

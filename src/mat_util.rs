@@ -1,7 +1,8 @@
 use crate::Index;
 use hashbrown::HashSet;
+use itertools::Itertools;
 use ndarray::ArrayViewMut1;
-use num_traits::{Float, Num, Unsigned};
+use num_traits::{Float, Num, Unsigned, Zero};
 use ordered_float::NotNan;
 use serde::{Deserialize, Serialize};
 use sprs::{CsMatBase, CsMatI, CsVecViewI, SpIndex};
@@ -9,57 +10,90 @@ use std::fmt::Display;
 use std::ops::{AddAssign, Deref, DerefMut, DivAssign};
 
 pub type SparseVec = sprs::CsVecI<f32, Index>;
+pub type SparseVecView<'a> = sprs::CsVecViewI<'a, f32, Index>;
 pub type SparseMat = sprs::CsMatI<f32, Index, usize>;
 pub type SparseMatView<'a> = sprs::CsMatViewI<'a, f32, Index, usize>;
 pub type DenseVec = ndarray::Array1<f32>;
+pub type DenseMat = ndarray::Array2<f32>;
+pub type DenseMatViewMut<'a> = ndarray::ArrayViewMut2<'a, f32>;
 
-/// A vector, can be either dense or sparse.
+/// A weight matrix of one-vs-all classifiers, can be stored in either dense or sparse format.
+///
+/// The matrix has dimensions (# of features) x (# of classes). Compare to storing the weights
+/// as a (# of classes) x (# of features) matrix, this storage is more cache friendly when the
+/// matrix is dense.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub(crate) enum Vector {
-    Dense(Vec<f32>),
-    Sparse(SparseVec),
+pub enum WeightMat {
+    Sparse(LilMat),
+    Dense(DenseMat),
 }
 
-impl Vector {
-    pub fn dim(&self) -> usize {
+impl WeightMat {
+    /// Compute dot product with a sparse vector after transposing.
+    ///
+    /// This is equivalent to dot(vec, mat).
+    pub fn t_dot_vec(&self, vec: SparseVecView) -> DenseVec {
         match self {
-            Vector::Dense(this) => this.len(),
-            Vector::Sparse(this) => this.dim(),
+            Self::Dense(mat) => mat.t().outer_iter().map(|w| vec.dot_dense(w)).collect(),
+            Self::Sparse(mat) => mat.t_dot_csvec(vec),
         }
     }
 
-    pub fn dot(&self, that: &SparseVec) -> f32 {
+    /// Get the shape of the matrix.
+    pub fn shape(&self) -> sprs::Shape {
         match self {
-            Vector::Dense(this) => that.dot_dense(this),
-            Vector::Sparse(this) => that.dot(this),
+            Self::Dense(mat) => {
+                let shape = mat.shape();
+                assert!(shape.len() == 2);
+                (shape[0], shape[1])
+            }
+            Self::Sparse(mat) => mat.shape(),
         }
     }
 
+    /// Returns whether the matrix is dense.
     pub fn is_dense(&self) -> bool {
         match self {
-            Vector::Dense(_) => true,
-            Vector::Sparse(_) => false,
+            Self::Dense(_) => true,
+            Self::Sparse(_) => false,
         }
     }
 
+    /// Returns the ratio of non-zero elements in the matrix when it's sparse.
     pub fn density(&self) -> f32 {
         match self {
-            Vector::Dense(_) => 1.,
-            Vector::Sparse(v) => v.nnz() as f32 / v.dim() as f32,
+            Self::Dense(_) => 1.,
+            Self::Sparse(m) => m.density() as f32,
         }
     }
 
+    /// Store the matrix in dense format if it's not already so.
     pub fn densify(&mut self) {
         *self = match self {
-            Vector::Dense(_) => {
+            Self::Dense(_) => {
                 return; // Already dense, do nothing
             }
-            Vector::Sparse(sparse_v) => {
-                let mut dense_v = vec![0.0; sparse_v.dim()];
-                sparse_v.scatter(&mut dense_v);
-                Vector::Dense(dense_v)
-            }
+            Self::Sparse(m) => Self::Dense(m.to_dense()),
         };
+    }
+
+    /// Create a new matrix from sparse row vectors.
+    ///
+    /// By default the matrix is only stored in dense format if it takes up less memory than using
+    /// the sparse format. One can call [`Self::densify()`] explicitly to force using the dense
+    /// format, e.g., to trade size for speed.
+    pub fn from_rows(row_vecs: &[SparseVec]) -> Self {
+        let mat = LilMat::from_columns(row_vecs);
+        let sparse_size = mat.mem_size();
+
+        let (rows, cols) = mat.shape();
+        let dense_size = std::mem::size_of::<f32>() * rows * cols;
+
+        if dense_size <= sparse_size {
+            Self::Dense(mat.to_dense())
+        } else {
+            Self::Sparse(mat)
+        }
     }
 }
 
@@ -342,6 +376,250 @@ where
     }
 }
 
+/// A sparse matrix stored in a compact list-of-lists format.
+///
+/// # Storage format
+///
+/// In the general case the storage could be either row- or column-major. In this implementation,
+/// data is stored row-major, i.e., `outer_inds` and `inner_inds` store row and column
+/// indices, respectively. Specifically, the matrix has `indptr.len() - 1` non-empty rows.
+/// The `i`-th non-empty row has index `outer_inds[i]`, and the non-zero values in that row
+/// have column indices `inner_inds[indptr[i]..indptr[i + 1]]` and corresponding values
+/// `data[indptr[i]..indptr[i+1]]`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LilMat {
+    outer_dim: usize,
+    inner_dim: usize,
+    indptr: Vec<usize>,
+    outer_inds: Vec<Index>,
+    inner_inds: Vec<Index>,
+    data: Vec<f32>,
+}
+
+impl LilMat {
+    /// Create an all-zero matrix of the given shape.
+    ///
+    /// The current implementation assumes outer dimension to be columns, and inner to be rows.
+    pub fn new(shape: sprs::Shape) -> Self {
+        LilMat {
+            outer_dim: shape.0,
+            inner_dim: shape.1,
+            indptr: vec![0],
+            outer_inds: Vec::new(),
+            inner_inds: Vec::new(),
+            data: Vec::new(),
+        }
+    }
+
+    /// Create an all zero matrix with the given shape and capacity.
+    ///
+    /// `nnz_outer` is the estimated number of columns with non-zero outer dimensions, and
+    /// `nnz` is the estimated total number of non-zero elements.
+    pub fn with_capacity(shape: sprs::Shape, nnz_outer: usize, nnz: usize) -> Self {
+        let mut indptr = Vec::with_capacity(nnz_outer + 1);
+        indptr.push(0);
+
+        LilMat {
+            outer_dim: shape.0,
+            inner_dim: shape.1,
+            indptr,
+            outer_inds: Vec::with_capacity(nnz_outer),
+            inner_inds: Vec::with_capacity(nnz),
+            data: Vec::with_capacity(nnz),
+        }
+    }
+
+    /// Create a new matrix from sparse column vectors.
+    pub fn from_columns(col_vecs: &[SparseVec]) -> Self {
+        if col_vecs.is_empty() {
+            return Self::new((0, 0));
+        }
+
+        let (cols, rows) = (col_vecs.len(), col_vecs[0].dim());
+
+        let mut triplets = Vec::new();
+        let mut max_col_nnz = 0;
+        let mut nnz = 0;
+        for (col, vec) in col_vecs.iter().enumerate() {
+            assert_eq!(
+                rows,
+                vec.dim(),
+                "Unexpected row vector dimension {}; expected {}",
+                rows,
+                vec.dim()
+            );
+            max_col_nnz = max_col_nnz.max(vec.nnz());
+            nnz += vec.nnz();
+            for (row, &val) in vec.iter() {
+                triplets.push((row, col, val));
+            }
+        }
+
+        triplets.sort_unstable_by_key(|&(r, c, _)| (r, c));
+
+        let mut mat = Self::with_capacity((rows, cols), max_col_nnz, nnz);
+        for (row, col, val) in triplets {
+            mat.append_value(row, col, val);
+        }
+        mat
+    }
+
+    /// Get the shape of the matrix.
+    ///
+    /// Note that here we assume the matrix is stored column-first, so the outer dimension is
+    /// the column, and the inner dimmension is the row.
+    pub fn shape(&self) -> sprs::Shape {
+        (self.outer_dim, self.inner_dim)
+    }
+
+    /// The density of the sparse matrix, defined as the number of non-zero
+    /// elements divided by the maximum number of elements
+    pub fn density(&self) -> f64 {
+        use sprs::SparseMat;
+        let (rows, cols) = self.shape();
+        if rows.is_zero() && cols.is_zero() {
+            f64::nan()
+        } else {
+            self.nnz() as f64 / (rows * cols) as f64
+        }
+    }
+
+    /// Append a new value to the matrix.
+    ///
+    /// The function should be called in non-descending order of outer index and ascending order
+    /// of inner index.
+    pub fn append_value(&mut self, outer_ind: usize, inner_ind: usize, value: f32) {
+        if value.is_zero() {
+            return;
+        }
+        assert!(outer_ind < self.outer_dim, "Outer index out of range");
+        assert!(inner_ind < self.inner_dim, "Inner index out of range");
+
+        let (outer_ind, inner_ind) = (Index::from_usize(outer_ind), Index::from_usize(inner_ind));
+
+        // When either the matrix is empty, or the last outer index is strictly less than
+        // the new one, we are appending to a new outer index.
+        if self.outer_inds.last().map_or(true, |&i| i < outer_ind) {
+            self.outer_inds.push(outer_ind);
+            self.indptr.push(self.inner_inds.len());
+        } else {
+            // Otherwise we should be appending to the same outer index as the last value. Here we
+            // check whether indices are appended out of order.
+            assert!(
+                *self.outer_inds.last().unwrap() == outer_ind,
+                "Outer index {} out of order",
+                outer_ind
+            );
+            assert!(
+                *self.inner_inds.last().unwrap() < inner_ind,
+                "Inner index {} out of order",
+                inner_ind
+            );
+        }
+
+        self.inner_inds.push(inner_ind);
+        self.data.push(value);
+        *self.indptr.last_mut().unwrap() += 1;
+
+        debug_assert_eq!(self.indptr.len(), self.outer_inds.len() + 1);
+        debug_assert_eq!(self.inner_inds.len(), self.data.len());
+        debug_assert!(
+            self.indptr.len() > 1
+                && self.indptr.last().unwrap().index_unchecked() == self.data.len()
+        );
+    }
+
+    /// Assign non-zero values to a dense matrix.
+    pub fn assign_to_dense(&self, mut array: DenseMatViewMut) {
+        for ((&ind_l, &ind_r), &outer_ind) in self
+            .indptr
+            .iter()
+            .zip(self.indptr.iter().skip(1))
+            .zip_eq(self.outer_inds.iter())
+        {
+            let (ind_l, ind_r, outer_ind) = (
+                ind_l.index_unchecked(),
+                ind_r.index_unchecked(),
+                outer_ind.index_unchecked(),
+            );
+            let inner_inds = &self.inner_inds[ind_l..ind_r];
+            let data = &self.data[ind_l..ind_r];
+            for (&inner_ind, &value) in inner_inds.iter().zip(data.iter()) {
+                let inner_ind = inner_ind.index_unchecked();
+                array[[outer_ind, inner_ind]] = value;
+            }
+        }
+    }
+
+    /// Convert to dense format.
+    pub fn to_dense(&self) -> DenseMat {
+        let mut dense_mat = DenseMat::zeros(self.shape());
+        self.assign_to_dense(dense_mat.view_mut());
+        dense_mat
+    }
+
+    /// The size in memory in bytes.
+    pub fn mem_size(&self) -> usize {
+        std::mem::size_of_val(self.indptr.as_slice())
+            + std::mem::size_of_val(self.outer_inds.as_slice())
+            + std::mem::size_of_val(self.inner_inds.as_slice())
+            + std::mem::size_of_val(self.data.as_slice())
+    }
+
+    /// Compute dot product with a sparse vector after transposing.
+    ///
+    /// The implementation uses binary search on row (column after transposing) indices.
+    pub fn t_dot_csvec(&self, vec: SparseVecView) -> DenseVec {
+        let (t_cols, t_rows) = self.shape();
+        assert_eq!(
+            t_cols,
+            vec.dim(),
+            "Dimension mismatch: {} != {}",
+            t_cols,
+            vec.dim()
+        );
+        let mut out = DenseVec::zeros(t_rows);
+
+        let mut i = 0; // i marks the next matrix outer index from which to binary search
+        for (outer_idx, &val1) in vec.iter() {
+            // NB:
+            //  Since the binary search is done on the slice [i..], the returned index di is an
+            //  offset from i.
+            let (di, found) =
+                match self.outer_inds[i..].binary_search(&Index::from_usize(outer_idx)) {
+                    Ok(di) => (di, true),
+                    Err(di) => (di, false),
+                };
+            i += di;
+            if found {
+                let rng = self.indptr[i].index_unchecked()..self.indptr[i + 1].index_unchecked();
+                for (&inner_idx, &val2) in self.inner_inds[rng.clone()]
+                    .iter()
+                    .zip_eq(self.data[rng.clone()].iter())
+                {
+                    out[inner_idx.index_unchecked()] += val1 * val2;
+                }
+            }
+        }
+
+        out
+    }
+}
+
+impl sprs::SparseMat for LilMat {
+    fn rows(&self) -> usize {
+        self.outer_dim
+    }
+
+    fn cols(&self) -> usize {
+        self.inner_dim
+    }
+
+    fn nnz(&self) -> usize {
+        self.data.len()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -516,5 +794,85 @@ mod tests {
             find_max(array![3., 5., 1., 5., 10., 0.].view())
         );
         assert_eq!(None, find_max(DenseVec::zeros(0).view()));
+    }
+
+    #[test]
+    fn test_lil_mat_density() {
+        let mat = LilMat::from_columns(&vec![
+            SparseVec::new(5, vec![1, 3], vec![1., 3.]),
+            SparseVec::new(5, vec![0], vec![2.]),
+            SparseVec::new(5, vec![], vec![]),
+            SparseVec::new(5, vec![2, 3], vec![4., 5.]),
+        ]);
+        assert_eq!(5. / (4. * 5.), mat.density())
+    }
+
+    #[test]
+    fn test_lil_mat_construction_and_to_dense() {
+        let mut mat = LilMat::new((4, 5));
+        let mut array = DenseMat::zeros((4, 5));
+
+        {
+            assert!(mat.to_dense().iter().all(|&v| v == 0.0));
+            mat.assign_to_dense(array.view_mut());
+            assert!(array.iter().all(|&v| v == 0.0));
+        }
+
+        {
+            mat.append_value(0, 1, 2.0);
+            mat.append_value(1, 0, 1.0);
+            mat.append_value(2, 3, 4.0);
+            mat.append_value(3, 0, 3.0);
+            mat.append_value(3, 3, 5.0);
+
+            let expected_array = array![
+                [0, 2, 0, 0, 0],
+                [1, 0, 0, 0, 0],
+                [0, 0, 0, 4, 0],
+                [3, 0, 0, 5, 0]
+            ]
+            .map(|&v| v as f32);
+
+            assert_eq!(expected_array, mat.to_dense());
+
+            mat.assign_to_dense(array.view_mut());
+            assert_eq!(expected_array, array);
+
+            assert_eq!(
+                expected_array,
+                LilMat::from_columns(&vec![
+                    SparseVec::new(4, vec![1, 3], vec![1., 3.]),
+                    SparseVec::new(4, vec![0], vec![2.]),
+                    SparseVec::new(4, vec![], vec![]),
+                    SparseVec::new(4, vec![2, 3], vec![4., 5.]),
+                    SparseVec::new(4, vec![], vec![]),
+                ])
+                .to_dense()
+            );
+        }
+    }
+
+    #[test]
+    fn test_lil_mat_t_dot_csvec() {
+        let csvec = SparseVec::new(4, vec![0, 2, 3], vec![1., 2., 3.]); // [1, 0, 2, 3]
+        let mut mat = LilMat::new((4, 5));
+        assert_eq!(array![0., 0., 0., 0., 0.], mat.t_dot_csvec(csvec.view()));
+
+        /*
+           [[0, 1, 0, 3, 0],
+           [2, 0, 0, 0, 0],
+           [0, 0, 0, 0, 0],
+           [0, 0, 4, 5, 0]]
+        */
+        mat.append_value(0, 1, 1.);
+        mat.append_value(0, 3, 3.);
+        mat.append_value(1, 0, 2.);
+        mat.append_value(3, 2, 4.);
+        mat.append_value(3, 3, 5.);
+
+        assert_eq!(
+            array![0., 1., 3. * 4., 3. * 1. + 5. * 3., 0.],
+            mat.t_dot_csvec(csvec.view())
+        );
     }
 }

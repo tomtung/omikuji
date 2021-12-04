@@ -287,21 +287,24 @@ impl TreeTrainer {
         &self,
         examples: Arc<TrainingExamples>,
         label_to_example_indices: &[Vec<usize>],
-    ) -> Vec<Option<Vector>> {
-        let classifier_weights = if !self.hyper_param.tree_structure_only {
+    ) -> WeightMat {
+        let weights = if !self.hyper_param.tree_structure_only {
             self.classifier_hyper_param(examples.len())
                 .train(&examples.feature_matrix.view(), label_to_example_indices)
         } else {
-            vec![None; label_to_example_indices.len()]
+            WeightMat::Sparse(LilMat::new((
+                label_to_example_indices.len(),
+                examples.feature_matrix.cols(),
+            )))
         };
 
-        assert_eq!(classifier_weights.len(), label_to_example_indices.len());
+        assert_eq!(weights.shape().1, label_to_example_indices.len());
         self.progress_bar
             .lock()
             .expect("Failed to lock progress bar")
             .add(label_to_example_indices.len() as u64);
 
-        classifier_weights
+        weights
     }
 }
 
