@@ -1,7 +1,7 @@
 [package]
 name = "omikuji_c-api"
 version = "0.3.4"
-edition = "2018"
+edition = "2021"
 authors = ["Tom Dong <tom.tung.dyb@gmail.com>"]
 
 [lib]
@@ -19,3 +19,5 @@ cbindgen = "0.20.*"
 
 [profile.release]
 panic = "abort"
+lto = true
+codegen-units = 1
