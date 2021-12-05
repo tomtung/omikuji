@@ -48,7 +48,7 @@ impl Model {
         let mut label_to_total_score = HashMap::<Index, f32>::new();
         let tree_predictions: Vec<_> = self
             .trees
-            .par_iter()
+            .iter()
             .map(|tree| tree.predict(self.settings.classifier_loss_type, &feature_vec, beam_size))
             .collect();
         for label_score_pairs in tree_predictions {
