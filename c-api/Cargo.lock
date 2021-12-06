@@ -355,6 +355,7 @@ dependencies = [
  "order-stat",
  "ordered-float",
  "pbr",
+ "pdqselect",
  "rand",
  "rayon",
  "serde",
@@ -406,6 +407,12 @@ dependencies = [
  "time 0.1.43",
  "winapi",
 ]
+
+[[package]]
+name = "pdqselect"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7778906d9321dd56cde1d1ffa69a73e59dcf5fda6d366f62727adf2bd4193aee"
 
 [[package]]
 name = "ppv-lite86"

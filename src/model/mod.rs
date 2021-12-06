@@ -324,7 +324,9 @@ impl TreeNode {
 
             swap(&mut curr_level, &mut next_level);
             if curr_level.len() > beam_size {
-                curr_level.sort_unstable_by_key(|&(_, score)| Reverse(NotNan::new(score).unwrap()));
+                pdqselect::select_by_key(curr_level.as_mut_slice(), beam_size, |&(_, score)| {
+                    Reverse(NotNan::new(score).unwrap())
+                });
                 curr_level.truncate(beam_size);
             }
         }
@@ -336,11 +338,19 @@ impl TreeNode {
                     let mut label_scores =
                         liblinear::predict(weights, classifier_loss_type, feature_vec);
                     label_scores.mapv_inplace(|v| (v + leaf_score).exp());
-                    labels
+
+                    let mut label_score_pairs = labels
                         .iter()
                         .cloned()
                         .zip_eq(label_scores.into_iter().cloned())
-                        .collect_vec()
+                        .collect_vec();
+                    pdqselect::select_by_key(
+                        label_score_pairs.as_mut_slice(),
+                        beam_size,
+                        |&(_, score)| Reverse(NotNan::new(score).unwrap()),
+                    );
+                    label_score_pairs.truncate(beam_size);
+                    label_score_pairs
                 }
                 _ => unreachable!(),
             })
