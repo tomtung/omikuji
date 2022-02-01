@@ -186,12 +186,13 @@ impl Model {
         let mut trees = Vec::<TreeNode>::new();
         for entry in dir_path.read_dir()? {
             let entry = entry?;
-            if {
+
+            let has_tree_file_name = {
                 let file_name = entry.file_name();
                 let file_name_str = file_name.to_string_lossy();
-                !(file_name_str.starts_with(TREE_FILE_NAME_PREFIX)
-                    && file_name_str.ends_with(".cbor"))
-            } {
+                file_name_str.starts_with(TREE_FILE_NAME_PREFIX) && file_name_str.ends_with(".cbor")
+            };
+            if !has_tree_file_name {
                 continue;
             }
 
