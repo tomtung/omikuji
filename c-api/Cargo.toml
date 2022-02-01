@@ -12,7 +12,7 @@ crate-type = ["staticlib", "cdylib"]
 itertools = "0.10.*"
 libc = "0.2.*"
 omikuji = { path = ".." }
-simple_logger = "1.15.*"
+simple_logger = "2.1.*"
 
 [build-dependencies]
 cbindgen = "0.20.*"
