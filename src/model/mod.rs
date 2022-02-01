@@ -7,7 +7,7 @@ use crate::mat_util::*;
 use crate::{Index, IndexValueVec};
 use hashbrown::HashMap;
 use itertools::Itertools;
-use log::info;
+use log::{info, warn};
 use ordered_float::NotNan;
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -217,10 +217,18 @@ impl Model {
             trees.push(tree);
         }
 
-        info!(
-            "Model loaded; it took {:.2}s",
-            start_t.elapsed().as_secs_f32()
-        );
+        if !trees.is_empty() {
+            info!(
+                "Loaded model with {} trees; it took {:.2}s",
+                trees.len(),
+                start_t.elapsed().as_secs_f32()
+            );
+        } else {
+            warn!(
+                "Failed to load any trees from model directory {}; returning an empty model",
+                dir_path.display()
+            )
+        }
         Ok(Self { trees, settings })
     }
 
