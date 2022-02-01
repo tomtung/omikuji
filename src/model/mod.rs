@@ -7,7 +7,7 @@ use crate::mat_util::*;
 use crate::{Index, IndexValueVec};
 use hashbrown::HashMap;
 use itertools::Itertools;
-use log::info;
+use log::{info, warn};
 use ordered_float::NotNan;
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -170,10 +170,11 @@ impl Model {
 
     /// Deserialize model from the given directory.
     pub fn load<P: AsRef<std::path::Path>>(dir_path: P) -> io::Result<Self> {
-        info!("Loading model...");
         let start_t = time::Instant::now();
 
         let dir_path = dir_path.as_ref();
+        info!("Loading model from {}...", dir_path.display());
+
         let settings = {
             let settings_path = dir_path.join(MODEL_SETTINGS_FILE_NAME);
             info!("Loading model settings from {}...", settings_path.display());
@@ -185,35 +186,50 @@ impl Model {
         let mut trees = Vec::<TreeNode>::new();
         for entry in dir_path.read_dir()? {
             let entry = entry?;
-            if entry.file_type()?.is_file() {
+
+            let has_tree_file_name = {
                 let file_name = entry.file_name();
                 let file_name_str = file_name.to_string_lossy();
-                if file_name_str.starts_with(TREE_FILE_NAME_PREFIX)
-                    && file_name_str.ends_with(".cbor")
-                {
-                    info!("Loading tree from {}...", entry.path().display());
-                    let reader = std::io::BufReader::new(std::fs::File::open(entry.path())?);
-                    let tree: TreeNode = serde_cbor::from_reader(reader).map_err(|e| {
-                        io::Error::new(
-                            io::ErrorKind::InvalidData,
-                            format!("Unable to deserialize tree: {}", e),
-                        )
-                    })?;
-                    if !tree.is_valid(settings) {
-                        return Err(io::Error::new(
-                            io::ErrorKind::InvalidData,
-                            format!("Tree loaded from {} is invalid", file_name_str),
-                        ));
-                    }
-                    trees.push(tree);
-                }
+                file_name_str.starts_with(TREE_FILE_NAME_PREFIX) && file_name_str.ends_with(".cbor")
+            };
+            if !has_tree_file_name {
+                continue;
             }
+
+            let tree_path = entry.path();
+            info!("Loading tree from {}...", tree_path.display());
+            let reader = std::io::BufReader::new(std::fs::File::open(tree_path.as_path())?);
+            let tree: TreeNode = serde_cbor::from_reader(reader).map_err(|e| {
+                io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!(
+                        "Unable to deserialize tree from {} with error: {}",
+                        tree_path.display(),
+                        e
+                    ),
+                )
+            })?;
+            if !tree.is_valid(settings) {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!("Tree loaded from {} is invalid", tree_path.display()),
+                ));
+            }
+            trees.push(tree);
         }
 
-        info!(
-            "Model loaded; it took {:.2}s",
-            start_t.elapsed().as_secs_f32()
-        );
+        if !trees.is_empty() {
+            info!(
+                "Loaded model with {} trees; it took {:.2}s",
+                trees.len(),
+                start_t.elapsed().as_secs_f32()
+            );
+        } else {
+            warn!(
+                "Failed to load any trees from model directory {}; returning an empty model",
+                dir_path.display()
+            )
+        }
         Ok(Self { trees, settings })
     }
 
