@@ -51,8 +51,6 @@ stages:
         container: 'quay.io/pypa/manylinux2010_x86_64:latest'
         strategy:
           matrix:
-            Python3.6:
-              python.version: 3.6
             Python3.7:
               python.version: 3.7
             Python3.8:
@@ -69,8 +67,6 @@ stages:
           vmImage: 'windows-2019'
         strategy:
           matrix:
-            Python3.6:
-              python.version: 3.6
             Python3.7:
               python.version: 3.7
             Python3.8:
@@ -85,8 +81,6 @@ stages:
           vmImage: 'macOS-1015'
         strategy:
           matrix:
-            Python3.6:
-              python.version: 3.6
             Python3.7:
               python.version: 3.7
             Python3.8:
