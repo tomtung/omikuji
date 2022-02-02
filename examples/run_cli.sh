@@ -5,7 +5,7 @@ set -e -x
 rm -rf ./model predictions.txt
 
 # Train with some optional parameters
-omikuji train --model_path ./model --cluster.k 5 --collapse_every_n_layers --n_trees 2 eurlex_train.txt
+omikuji train --model_path ./model --cluster.k 5 --collapse_every_n_layers 1 --n_trees 2 eurlex_train.txt
 
 ls -lh ./model/
 
