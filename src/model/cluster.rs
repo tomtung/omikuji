@@ -1,4 +1,5 @@
 use crate::mat_util::*;
+use const_default::ConstDefault;
 use itertools::{izip, Itertools};
 use ndarray::{Array2, ArrayView2, ArrayViewMut2, Axis, ScalarOperand, ShapeBuilder};
 use num_traits::Float;
@@ -22,14 +23,18 @@ pub struct HyperParam {
     pub min_size: usize,
 }
 
+impl ConstDefault for HyperParam {
+    const DEFAULT: Self = Self {
+        k: 2,
+        balanced: true,
+        eps: 0.0001,
+        min_size: 2,
+    };
+}
+
 impl Default for HyperParam {
     fn default() -> Self {
-        Self {
-            k: 2,
-            balanced: true,
-            eps: 0.0001,
-            min_size: 2,
-        }
+        <Self as ConstDefault>::DEFAULT
     }
 }
 

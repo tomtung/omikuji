@@ -88,8 +88,8 @@ impl DataSet {
     }
 
     /// Load a data file from the Extreme Classification Repository
-    pub fn load_xc_repo_data_file(path: &str) -> Result<Self> {
-        info!("Loading data from {}", path);
+    pub fn load_xc_repo_data_file<P: AsRef<std::path::Path>>(path: P) -> Result<Self> {
+        info!("Loading data from {}", path.as_ref().display());
         let start_t = time::Instant::now();
 
         let file_content = fs::read_to_string(path)?;

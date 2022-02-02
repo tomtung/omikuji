@@ -1,4 +1,5 @@
 use crate::mat_util::*;
+use const_default::ConstDefault;
 use itertools::Itertools;
 use rand::prelude::*;
 use rayon::prelude::*;
@@ -25,15 +26,19 @@ pub struct HyperParam {
     pub max_iter: u32,
 }
 
+impl ConstDefault for HyperParam {
+    const DEFAULT: Self = Self {
+        loss_type: LossType::Hinge,
+        eps: 0.1,
+        c: 1.,
+        weight_threshold: 0.1,
+        max_iter: 20,
+    };
+}
+
 impl Default for HyperParam {
     fn default() -> Self {
-        Self {
-            loss_type: LossType::Hinge,
-            eps: 0.1,
-            c: 1.,
-            weight_threshold: 0.1,
-            max_iter: 20,
-        }
+        <Self as ConstDefault>::DEFAULT
     }
 }
 

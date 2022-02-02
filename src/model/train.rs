@@ -3,6 +3,7 @@ use crate::data::DataSet;
 use crate::mat_util::*;
 use crate::util::{create_progress_bar, ProgressBar};
 use crate::{Index, IndexSet, IndexValueVec};
+use const_default::ConstDefault;
 use hashbrown::HashMap;
 use itertools::{izip, Itertools};
 use log::info;
@@ -25,19 +26,23 @@ pub struct HyperParam {
     pub train_trees_1_by_1: bool,
 }
 
+impl ConstDefault for HyperParam {
+    const DEFAULT: Self = Self {
+        n_trees: 3,
+        min_branch_size: 100,
+        max_depth: 20,
+        centroid_threshold: 0.,
+        collapse_every_n_layers: 0,
+        linear: liblinear::HyperParam::DEFAULT,
+        cluster: cluster::HyperParam::DEFAULT,
+        tree_structure_only: false,
+        train_trees_1_by_1: false,
+    };
+}
+
 impl Default for HyperParam {
     fn default() -> Self {
-        Self {
-            n_trees: 3,
-            min_branch_size: 100,
-            max_depth: 20,
-            centroid_threshold: 0.,
-            collapse_every_n_layers: 0,
-            linear: liblinear::HyperParam::default(),
-            cluster: cluster::HyperParam::default(),
-            tree_structure_only: false,
-            train_trees_1_by_1: false,
-        }
+        <Self as ConstDefault>::DEFAULT
     }
 }
 
