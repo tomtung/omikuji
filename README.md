@@ -150,86 +150,165 @@ label_score_pairs =  model.predict(feature_value_pairs)
 ## Usage
 ```
 $ omikuji train --help
-omikuji-train
-Train a new model
+Train a new omikuji model
 
 USAGE:
-    omikuji train [FLAGS] [OPTIONS] <TRAINING_DATA_PATH>
-
-FLAGS:
-        --cluster.unbalanced     Perform regular k-means clustering instead of balanced k-means clustering
-    -h, --help                   Prints help information
-        --train_trees_1_by_1     Finish training each tree before start training the next; limits initial
-                                 parallelization but saves memory
-        --tree_structure_only    Build the trees without training classifiers; useful when a downstream user needs the
-                                 tree structures only
-    -V, --version                Prints version information
-
-OPTIONS:
-        --centroid_threshold <THRESHOLD>         Threshold for pruning label centroid vectors [default: 0]
-        --cluster.eps <EPS>                      Epsilon value for determining clustering convergence [default: 0.0001]
-        --cluster.k <K>                          Number of clusters [default: 2]
-        --cluster.min_size <SIZE>
-            Labels in clusters with sizes smaller than this threshold are reassigned to other clusters instead [default:
-            2]
-        --collapse_every_n_layers <N>
-            Number of adjacent layers to collapse, which increases tree arity and decreases tree depth [default: 0]
-
-        --linear.c <C>                           Cost co-efficient for regularizing linear classifiers [default: 1]
-        --linear.eps <EPS>
-            Epsilon value for determining linear classifier convergence [default: 0.1]
-
-        --linear.loss <LOSS>
-            Loss function used by linear classifiers [default: hinge]  [possible values: hinge, log]
-
-        --linear.max_iter <M>
-            Max number of iterations for training each linear classifier [default: 20]
-
-        --linear.weight_threshold <THRESHOLD>
-            Threshold for pruning weight vectors of linear classifiers [default: 0.1]
-
-        --max_depth <DEPTH>                      Maximum tree depth [default: 20]
-        --min_branch_size <SIZE>
-            Number of labels below which no further clustering & branching is done [default: 100]
-
-        --model_path <PATH>
-            Optional path of the directory where the trained model will be saved if provided; if an model with
-            compatible settings is already saved in the given directory, the newly trained trees will be added to the
-            existing model
-        --n_threads <T>
-            Number of worker threads. If 0, the number is selected automatically [default: 0]
-
-        --n_trees <N>                            Number of trees [default: 3]
+    omikuji train [OPTIONS] <TRAINING_DATA_PATH>
 
 ARGS:
-    <TRAINING_DATA_PATH>    Path to training dataset file (in the format of the Extreme Classification Repository)
+    <TRAINING_DATA_PATH>
+            Path to training dataset file
+
+            The dataset file is expected to be in the format of the Extreme Classification
+            Repository.
+
+OPTIONS:
+        --centroid_threshold <THRESHOLD>
+            Threshold for pruning label centroid vectors
+
+            [default: 0]
+
+        --cluster.eps <CLUSTER_EPS>
+            Epsilon value for determining linear classifier convergence
+
+            [default: 0.0001]
+
+        --cluster.k <K>
+            Number of clusters
+
+            [default: 2]
+
+        --cluster.min_size <MIN_SIZE>
+            Labels in clusters with sizes smaller than this threshold are reassigned to other
+            clusters instead
+
+            [default: 2]
+
+        --cluster.unbalanced
+            Perform regular k-means clustering instead of balanced k-means clustering
+
+        --collapse_every_n_layers <N_LAYERS>
+            Number of adjacent layers to collapse
+
+            This increases tree arity and decreases tree depth.
+
+            [default: 0]
+
+    -h, --help
+            Print help information
+
+        --linear.c <C>
+            Cost coefficient for regularizing linear classifiers
+
+            [default: 1]
+
+        --linear.eps <LINEAR_EPS>
+            Epsilon value for determining linear classifier convergence
+
+            [default: 0.1]
+
+        --linear.loss <LOSS>
+            Loss function used by linear classifiers
+
+            [default: hinge]
+            [possible values: hinge, log]
+
+        --linear.max_iter <M>
+            Max number of iterations for training each linear classifier
+
+            [default: 20]
+
+        --linear.weight_threshold <MIN_WEIGHT>
+            Threshold for pruning weight vectors of linear classifiers
+
+            [default: 0.1]
+
+        --max_depth <DEPTH>
+            Maximum tree depth
+
+            [default: 20]
+
+        --min_branch_size <SIZE>
+            Number of labels below which no further clustering & branching is done
+
+            [default: 100]
+
+        --model_path <MODEL_PATH>
+            Optional path of the directory where the trained model will be saved if provided
+
+            If an model with compatible settings is already saved in the given directory, the newly
+            trained trees will be added to the existing model")
+
+        --n_threads <N_THREADS>
+            Number of worker threads
+
+            If 0, the number is selected automatically.
+
+            [default: 0]
+
+        --n_trees <N_TREES>
+            Number of trees
+
+            [default: 3]
+
+        --train_trees_1_by_1
+            Finish training each tree before start training the next
+
+            This limits initial parallelization but saves memory.
+
+        --tree_structure_only
+            Build the trees without training classifiers
+
+            Might be useful when a downstream user needs the tree structures only.
 ```
 
 ```
 $ omikuji test --help
-omikuji-test
-Test an existing model
+Test an existing omikuji model
 
 USAGE:
     omikuji test [OPTIONS] <MODEL_PATH> <TEST_DATA_PATH>
 
-FLAGS:
-    -h, --help       Prints help information
-    -V, --version    Prints version information
+ARGS:
+    <MODEL_PATH>
+            Path of the directory where the trained model is saved
+
+    <TEST_DATA_PATH>
+            Path to test dataset file
+
+            The dataset file is expected to be in the format of the Extreme Classification
+            Repository.
 
 OPTIONS:
-        --beam_size <beam_size>           Beam size for beam search [default: 10]
-        --k_top <K>                       Number of top predictions to write out for each test example [default: 5]
-        --max_sparse_density <DENSITY>    Density threshold above which sparse weight vectors are converted to dense
-                                          format. Lower values speed up prediction at the cost of more memory usage
-                                          [default: 0.1]
-        --n_threads <T>                   Number of worker threads. If 0, the number is selected automatically [default:
-                                          0]
-        --out_path <PATH>                 Path to the which predictions will be written, if provided
+        --beam_size <BEAM_SIZE>
+            Beam size for beam search
 
-ARGS:
-    <MODEL_PATH>        Path of the directory where the trained model is saved
-    <TEST_DATA_PATH>    Path to test dataset file (in the format of the Extreme Classification Repository)
+            [default: 10]
+
+    -h, --help
+            Print help information
+
+        --k_top <K>
+            Number of top predictions to write out for each test example
+
+            [default: 5]
+
+        --max_sparse_density <DENSITY>
+            Density threshold above which sparse weight vectors are converted to dense format
+
+            Lower values speed up prediction at the cost of more memory usage.
+
+            [default: 0.1]
+
+        --n_threads <N_THREADS>
+            Number of worker threads
+
+            If 0, the number is selected automatically.
+
+            [default: 0]
+
+        --out_path <OUT_PATH>
+            Path to the which predictions will be written, if provided
 ```
 
 ### Data format

@@ -17,7 +17,8 @@ readme = "README.md"
 exclude = ["examples/"]
 
 [dependencies]
-clap = { version = "2.34.*", optional = true }
+const-default = "1.0.*"
+clap = { version = "3.0.*", features = ["cargo", "derive"], optional = true }
 hashbrown = "0.11.*"
 itertools = "0.10.*"
 log = "0.4.*"
