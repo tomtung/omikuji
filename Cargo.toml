@@ -19,13 +19,13 @@ exclude = ["examples/"]
 [dependencies]
 const-default = "1.0.*"
 clap = { version = "3.0.*", features = ["cargo", "derive"], optional = true }
-hashbrown = "0.11.*"
+hashbrown = "0.12.*"
 itertools = "0.10.*"
 log = "0.4.*"
 ndarray = { version = "0.14.*", features = ["serde-1"] }
 num-traits = "0.2.*"
 order-stat = "0.1.*"
-ordered-float = "2.8.*"
+ordered-float = "2.10.*"
 pbr = "1.0.*"
 rand = "0.8.*"
 rayon = "1.5.*"
