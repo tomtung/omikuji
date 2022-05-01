@@ -33,6 +33,9 @@ steps:
       3.9)
         LANG_ABI_VER="cp39-cp39"
         ;;
+      3.10)
+        LANG_ABI_VER="cp310-cp310"
+        ;;
       esac
 
       echo "##vso[task.setvariable variable=pybin;]/opt/python/${LANG_ABI_VER}/bin/python"
@@ -50,7 +53,10 @@ steps:
         FULL_VERSION=3.8.10
         ;;
       3.9)
-        FULL_VERSION=3.9.9
+        FULL_VERSION=3.9.12
+        ;;
+      3.10)
+        FULL_VERSION=3.10.0
         ;;
       esac
 
