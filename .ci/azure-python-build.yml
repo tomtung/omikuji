@@ -47,21 +47,25 @@ steps:
 
       case $(python.version) in
       3.7)
-        FULL_VERSION=3.7.9
+        PY_FULL_VERSION=3.7.9
+        MACOS_VERSION=x10.9
         ;;
       3.8)
-        FULL_VERSION=3.8.10
+        PY_FULL_VERSION=3.8.10
+        MACOS_VERSION=x10.9
         ;;
       3.9)
-        FULL_VERSION=3.9.12
+        PY_FULL_VERSION=3.9.12
+        MACOS_VERSION=x10.9
         ;;
       3.10)
-        FULL_VERSION=3.10.0
+        PY_FULL_VERSION=3.10.4
+        MACOS_VERSION=11
         ;;
       esac
 
-      INSTALLER_NAME=python-$FULL_VERSION-macosx10.9.pkg
-      curl https://www.python.org/ftp/python/$FULL_VERSION/$INSTALLER_NAME --output $INSTALLER_NAME
+      INSTALLER_NAME=python-$PY_FULL_VERSION-macos$MACOS_VERSION.pkg
+      curl https://www.python.org/ftp/python/$PY_FULL_VERSION/$INSTALLER_NAME --output $INSTALLER_NAME
       sudo installer -pkg $INSTALLER_NAME -target /
 
       echo "##vso[task.setvariable variable=PATH]$PATH:/Users/runner/Library/Python/$(python.version)/bin"
