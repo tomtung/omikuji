@@ -26,7 +26,7 @@ stages:
           - script: |
               set -e -x
 
-              cargo install --path . --features cli
+              cargo install --path . --features cli --locked
               omikuji --help
 
               cd examples
