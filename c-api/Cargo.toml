@@ -15,7 +15,7 @@ omikuji = { path = ".." }
 simple_logger = "2.1.*"
 
 [build-dependencies]
-cbindgen = "0.20.*"
+cbindgen = "0.24.*"
 
 [profile.release]
 panic = "abort"
