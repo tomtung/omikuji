@@ -88,12 +88,12 @@ An alternative way for building balanced, shallow and wide trees is to collapse 
 ## Build & Install
 Omikuji can be easily built & installed with [Cargo](https://doc.rust-lang.org/cargo/getting-started/installation.html) as a CLI app:
 ```
-cargo install omikuji --features cli
+cargo install omikuji --features cli --locked
 ```
 
 Or install from the latest source:
 ```
-cargo install --git https://github.com/tomtung/omikuji.git --features cli
+cargo install --git https://github.com/tomtung/omikuji.git --features cli --locked
 ```
 
 The CLI app will be available as `omikuji`. For example, to reproduce the results on the EURLex-4K dataset:
