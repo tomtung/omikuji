@@ -90,7 +90,7 @@ stages:
 
       - job: macOS
         pool:
-          vmImage: 'macOS-1015'
+          vmImage: 'macOS-11'
         strategy:
           matrix:
             Python3.7:
