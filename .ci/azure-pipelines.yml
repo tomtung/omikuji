@@ -59,6 +59,10 @@ stages:
               python.version: 3.9
             Python3.10:
               python.version: 3.10
+            Python3.11:
+              python.version: 3.11
+            Python3.12:
+              python.version: 3.12
         steps:
           - template: azure-python-build.yml
             parameters:
@@ -77,6 +81,10 @@ stages:
               python.version: 3.9
             Python3.10:
               python.version: 3.10
+            Python3.11:
+              python.version: 3.11
+            Python3.12:
+              python.version: 3.12
         steps:
           - template: azure-python-build.yml
 
@@ -93,5 +101,9 @@ stages:
               python.version: 3.9
             Python3.10:
               python.version: 3.10
+            Python3.11:
+              python.version: 3.11
+            Python3.12:
+              python.version: 3.12
         steps:
           - template: azure-python-build.yml
