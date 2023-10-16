@@ -44,8 +44,8 @@ setup(
     package_dir={"": "python-wrapper"},
     zip_safe=False,
     platforms="any",
-    setup_requires=["milksnake"],
-    install_requires=["milksnake"],
+    setup_requires=["milksnake>=0.1.6"],
+    install_requires=["milksnake>=0.1.6"],
     milksnake_tasks=[build_native],
     milksnake_universal=False,
     classifiers=[
