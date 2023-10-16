@@ -48,7 +48,7 @@ stages:
       - job: manylinux
         pool:
           vmImage: 'ubuntu-latest'
-        container: 'quay.io/pypa/manylinux2010_x86_64:latest'
+        container: 'quay.io/pypa/manylinux2014_x86_64:latest'
         strategy:
           matrix:
             Python3.7:
