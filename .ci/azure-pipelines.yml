@@ -91,6 +91,8 @@ stages:
       - job: macOS
         pool:
           vmImage: 'macOS-11'
+        variables:
+          SYSTEM_VERSION_COMPAT: 0  # Make Python detect macOS version as 11.x instead 10.y
         strategy:
           matrix:
             Python3.7:
