@@ -24,9 +24,6 @@ steps:
       set -e
 
       case $(python.version) in
-      3.7)
-        LANG_ABI_VER="cp37-cp37m"
-        ;;
       3.8)
         LANG_ABI_VER="cp38-cp38"
         ;;
@@ -52,10 +49,6 @@ steps:
       set -e
 
       case $(python.version) in
-      3.7)
-        PY_FULL_VERSION=3.7.9
-        MACOS_VERSION=x10.9
-        ;;
       3.8)
         PY_FULL_VERSION=3.8.10
         MACOS_VERSION=x10.9

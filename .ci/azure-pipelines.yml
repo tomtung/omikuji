@@ -39,7 +39,7 @@ stages:
         pool:
           vmImage: 'ubuntu-latest'
         variables:
-          python.version: 3.7
+          python.version: 3.8
         steps:
           - template: azure-python-build.yml
             parameters:
@@ -51,8 +51,6 @@ stages:
         container: 'quay.io/pypa/manylinux2014_x86_64:latest'
         strategy:
           matrix:
-            Python3.7:
-              python.version: 3.7
             Python3.8:
               python.version: 3.8
             Python3.9:
@@ -73,8 +71,6 @@ stages:
           vmImage: 'windows-2022'
         strategy:
           matrix:
-            Python3.7:
-              python.version: 3.7
             Python3.8:
               python.version: 3.8
             Python3.9:
@@ -95,8 +91,6 @@ stages:
           SYSTEM_VERSION_COMPAT: 0  # Make Python detect macOS version as 11.x instead 10.y
         strategy:
           matrix:
-            Python3.7:
-              python.version: 3.7
             Python3.8:
               python.version: 3.8
             Python3.9:
