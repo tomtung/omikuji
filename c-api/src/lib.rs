@@ -210,7 +210,7 @@ pub unsafe extern "C" fn omikuji_predict(
     };
 
     let predictions = maybe_run_with_thread_pool(thread_pool_ptr, || {
-        model.predict(&feature_vec, beam_size as usize)
+        model.predict(&feature_vec, beam_size)
     });
 
     let output_len = output_len.min(predictions.len());
