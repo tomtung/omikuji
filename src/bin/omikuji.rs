@@ -1,4 +1,4 @@
-use clap::{ArgEnum, Args, Parser, Subcommand};
+use clap::{ValueEnum, Args, Parser, Subcommand};
 use const_default::ConstDefault;
 use omikuji::model::liblinear::LossType;
 use omikuji::model::TrainHyperParam;
@@ -7,7 +7,7 @@ use std::io::{BufWriter, Write};
 use std::path::PathBuf;
 
 #[derive(Parser)]
-#[clap(version, about, long_about = None)]
+#[command(version, about, long_about = None)]
 struct Cli {
     #[clap(subcommand)]
     command: Commands,
@@ -23,101 +23,101 @@ enum Commands {
 }
 
 #[derive(Args)]
-#[clap(rename_all = "snake_case")]
+#[command(rename_all = "snake_case")]
 struct TrainArgs {
     /// Path to training dataset file
     ///
     /// The dataset file is expected to be in the format of the Extreme Classification
     /// Repository.
-    #[clap(value_parser, required = true)]
+    #[arg(required = true)]
     training_data_path: PathBuf,
 
     /// Optional path of the directory where the trained model will be saved if provided
     ///
     /// If an model with compatible settings is already saved in the given directory,
     /// the newly trained trees will be added to the existing model")
-    #[clap(value_parser, long)]
+    #[arg(long)]
     model_path: Option<PathBuf>,
 
     /// Number of worker threads
     ///
     /// If 0, the number is selected automatically.
-    #[clap(value_parser, long, default_value_t = 0)]
+    #[arg(long, default_value_t = 0)]
     n_threads: usize,
 
     /// Number of trees.
-    #[clap(value_parser, long, default_value_t = TrainHyperParam::DEFAULT.n_trees)]
+    #[arg(long, default_value_t = TrainHyperParam::DEFAULT.n_trees)]
     n_trees: usize,
 
     /// Number of labels below which no further clustering & branching is done
-    #[clap(value_parser, long, name = "SIZE", default_value_t = TrainHyperParam::DEFAULT.min_branch_size)]
+    #[arg(long, value_name = "SIZE", default_value_t = TrainHyperParam::DEFAULT.min_branch_size)]
     min_branch_size: usize,
 
     /// Maximum tree depth
-    #[clap(value_parser, long, name = "DEPTH", default_value_t = TrainHyperParam::DEFAULT.max_depth)]
+    #[arg(long, value_name = "DEPTH", default_value_t = TrainHyperParam::DEFAULT.max_depth)]
     max_depth: usize,
 
     /// Threshold for pruning label centroid vectors
-    #[clap(value_parser, long, name = "THRESHOLD", default_value_t = TrainHyperParam::DEFAULT.centroid_threshold)]
+    #[arg(long, value_name = "THRESHOLD", default_value_t = TrainHyperParam::DEFAULT.centroid_threshold)]
     centroid_threshold: f32,
 
     /// Number of adjacent layers to collapse
     ///
     /// This increases tree arity and decreases tree depth.
-    #[clap(value_parser, long, name = "N_LAYERS", default_value_t = TrainHyperParam::DEFAULT.collapse_every_n_layers)]
+    #[arg(long, value_name = "N_LAYERS", default_value_t = TrainHyperParam::DEFAULT.collapse_every_n_layers)]
     collapse_every_n_layers: usize,
 
     /// Build the trees without training classifiers
     ///
     /// Might be useful when a downstream user needs the tree structures only.
-    #[clap(value_parser, long)]
+    #[arg(long)]
     tree_structure_only: bool,
 
     /// Finish training each tree before start training the next
     ///
     /// This limits initial parallelization but saves memory.
-    #[clap(value_parser, long)]
+    #[arg(long)]
     train_trees_1_by_1: bool,
 
     /// Loss function used by linear classifiers
-    #[clap(value_parser, arg_enum, long = "linear.loss", name = "LOSS", default_value_t = TrainHyperParam::DEFAULT.linear.loss_type.into())]
+    #[arg(value_enum, long = "linear.loss", value_name = "LOSS", default_value_t = TrainHyperParam::DEFAULT.linear.loss_type.into())]
     linear_loss: CliLossType,
 
     /// Epsilon value for determining linear classifier convergence
-    #[clap(value_parser, long = "linear.eps", default_value_t = TrainHyperParam::DEFAULT.linear.eps)]
+    #[arg(long = "linear.eps", default_value_t = TrainHyperParam::DEFAULT.linear.eps)]
     linear_eps: f32,
 
     /// Cost coefficient for regularizing linear classifiers
-    #[clap(value_parser, long = "linear.c", name = "C", default_value_t = TrainHyperParam::DEFAULT.linear.c)]
+    #[arg(long = "linear.c", value_name = "C", default_value_t = TrainHyperParam::DEFAULT.linear.c)]
     linear_c: f32,
 
     /// Threshold for pruning weight vectors of linear classifiers
-    #[clap(value_parser, long = "linear.weight_threshold", name = "MIN_WEIGHT", default_value_t = TrainHyperParam::DEFAULT.linear.weight_threshold)]
+    #[arg(long = "linear.weight_threshold", value_name = "MIN_WEIGHT", default_value_t = TrainHyperParam::DEFAULT.linear.weight_threshold)]
     linear_weight_threshold: f32,
 
     /// Max number of iterations for training each linear classifier
-    #[clap(value_parser, long = "linear.max_iter", name = "M", default_value_t = TrainHyperParam::DEFAULT.linear.max_iter)]
+    #[arg(long = "linear.max_iter", value_name = "M", default_value_t = TrainHyperParam::DEFAULT.linear.max_iter)]
     linear_max_iter: u32,
 
     /// Number of clusters
-    #[clap(value_parser, long = "cluster.k", name = "K", default_value_t = TrainHyperParam::DEFAULT.cluster.k)]
+    #[arg(long = "cluster.k", value_name = "K", default_value_t = TrainHyperParam::DEFAULT.cluster.k)]
     cluster_k: usize,
 
     /// Perform regular k-means clustering instead of balanced k-means clustering
-    #[clap(value_parser, long = "cluster.unbalanced")]
+    #[arg(long = "cluster.unbalanced")]
     cluster_unbalanced: bool,
 
     /// Epsilon value for determining linear classifier convergence
-    #[clap(value_parser, long = "cluster.eps", default_value_t = TrainHyperParam::DEFAULT.cluster.eps)]
+    #[arg(long = "cluster.eps", default_value_t = TrainHyperParam::DEFAULT.cluster.eps)]
     cluster_eps: f32,
 
     /// Labels in clusters with sizes smaller than this threshold are reassigned to other
     /// clusters instead
-    #[clap(value_parser, long = "cluster.min_size", name = "MIN_SIZE", default_value_t = TrainHyperParam::DEFAULT.cluster.min_size)]
+    #[arg(long = "cluster.min_size", value_name = "MIN_SIZE", default_value_t = TrainHyperParam::DEFAULT.cluster.min_size)]
     cluster_min_size: usize,
 }
 
-#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ArgEnum)]
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
 enum CliLossType {
     Hinge,
     Log,
@@ -169,41 +169,41 @@ impl From<&TrainArgs> for TrainHyperParam {
 }
 
 #[derive(Args)]
-#[clap(rename_all = "snake_case")]
+#[command(rename_all = "snake_case")]
 struct TestArgs {
     /// Path of the directory where the trained model is saved
-    #[clap(value_parser, required = true)]
+    #[arg(required = true)]
     model_path: PathBuf,
 
     /// Path to test dataset file
     ///
     /// The dataset file is expected to be in the format of the Extreme Classification
     /// Repository.
-    #[clap(value_parser, required = true)]
+    #[arg(required = true)]
     test_data_path: PathBuf,
 
     /// Number of worker threads
     ///
     /// If 0, the number is selected automatically.
-    #[clap(value_parser, long, default_value_t = 0)]
+    #[arg(long, default_value_t = 0)]
     n_threads: usize,
 
     /// Density threshold above which sparse weight vectors are converted to dense format
     ///
     /// Lower values speed up prediction at the cost of more memory usage.
-    #[clap(value_parser, long, name = "DENSITY", default_value_t = 0.1)]
+    #[arg(long, value_name = "DENSITY", default_value_t = 0.1)]
     max_sparse_density: f32,
 
     /// Beam size for beam search
-    #[clap(value_parser, long, default_value_t = 10)]
+    #[arg(long, default_value_t = 10)]
     beam_size: usize,
 
     /// Number of top predictions to write out for each test example
-    #[clap(value_parser, long, name = "K", default_value_t = 5)]
+    #[arg(long, value_name = "K", default_value_t = 5)]
     k_top: usize,
 
     /// Path to the which predictions will be written, if provided
-    #[clap(value_parser, long)]
+    #[arg(long)]
     out_path: Option<PathBuf>,
 }
 
@@ -267,4 +267,10 @@ fn main() {
         Commands::Train(args) => train(args),
         Commands::Test(args) => test(args),
     }
+}
+
+#[test]
+fn verify_cli() {
+    use clap::CommandFactory;
+    Cli::command().debug_assert();
 }
