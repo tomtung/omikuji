@@ -1,4 +1,4 @@
-use clap::{ValueEnum, Args, Parser, Subcommand};
+use clap::{Args, Parser, Subcommand, ValueEnum};
 use const_default::ConstDefault;
 use omikuji::model::liblinear::LossType;
 use omikuji::model::TrainHyperParam;

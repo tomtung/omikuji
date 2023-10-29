@@ -209,9 +209,8 @@ pub unsafe extern "C" fn omikuji_predict(
             .collect_vec()
     };
 
-    let predictions = maybe_run_with_thread_pool(thread_pool_ptr, || {
-        model.predict(&feature_vec, beam_size)
-    });
+    let predictions =
+        maybe_run_with_thread_pool(thread_pool_ptr, || model.predict(&feature_vec, beam_size));
 
     let output_len = output_len.min(predictions.len());
     let output_labels = slice::from_raw_parts_mut(output_labels, output_len);
