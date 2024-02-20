@@ -218,7 +218,7 @@ class Model:
 
         # Creates and map the rust feature vectors from the numpy arrays
         feature_indices = ffi.new("uint32_t[]", num_nnz_features)
-        feature_indptr = ffi.new("uint32_t[]", num_feature_rows+1)
+        feature_indptr = ffi.new("uint32_t[]", num_feature_rows + 1)
         feature_data = ffi.new("float[]", num_nnz_features)
         feature_indices = ffi.from_buffer("uint32_t[]", features.indices)
         feature_indptr = ffi.from_buffer("uint32_t[]", features.indptr)
@@ -226,7 +226,7 @@ class Model:
 
         # Creates and map the rust label vectors from the numpy arrays
         label_indices = ffi.new("uint32_t[]", num_nnz_labels)
-        label_indptr = ffi.new("uint32_t[]", num_labels_rows+1)
+        label_indptr = ffi.new("uint32_t[]", num_labels_rows + 1)
         label_data = ffi.new("uint32_t[]", num_nnz_labels)
         label_indices = ffi.from_buffer("uint32_t[]", labels.indices)
         label_indptr = ffi.from_buffer("uint32_t[]", labels.indptr)
