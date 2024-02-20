@@ -1,6 +1,8 @@
 __version__ = "0.5.1"
 __all__ = ["Model", "LossType"]
 
+import numpy as np
+from scipy.sparse import csr_matrix
 from ._libomikuji import lib, ffi
 from enum import Enum
 import os
@@ -34,6 +36,16 @@ class _ThreadPoolHandle:
             self._reset()
 
         return self._ptr
+
+
+def extract_pairs(indices, indptr, data):
+    pairs = []
+    for row in range(len(indptr) - 1):
+        start = indptr[row]
+        end = indptr[row + 1]
+        for i in range(start, end):
+            pairs.append((indices[i], data[i]))
+    return pairs
 
 
 class Model:
@@ -156,6 +168,86 @@ class Model:
         if dataset_ptr == ffi.NULL:
             raise RuntimeError("Failed to load data from %s" % (data_path,))
 
+        dataset_ptr = ffi.gc(dataset_ptr, lib.free_omikuji_data_set)
+
+        if hyper_param is None:
+            hyper_param = cls.default_hyper_param()
+
+        model_ptr = lib.train_omikuji_model(dataset_ptr, hyper_param, thread_pool.ptr)
+        if model_ptr == ffi.NULL:
+            raise RuntimeError("Failed to train model")
+
+        return Model(model_ptr)
+
+    @classmethod
+    def train_on_features_labels(
+        cls,
+        features: csr_matrix,
+        labels: csr_matrix,
+        hyper_param=None,
+        n_threads: Optional[int] = None,
+    ):
+        num_features = features.shape[1]
+        num_labels = labels.shape[1]
+        num_feature_rows = features.shape[0]
+        num_labels_rows = labels.shape[0]
+        assert num_feature_rows == num_labels_rows
+        thread_pool = _ThreadPoolHandle(n_threads)
+
+        # Check if it is needed to cast data
+        if features.dtype is not np.float32:
+            features = csr_matrix(features, dtype=np.float32)
+
+        if labels.dtype is not np.uint32:
+            labels = csr_matrix(labels, dtype=np.uint32)
+
+        num_nnz_features = features.nnz
+        num_nnz_labels = labels.nnz
+        # print("======== FEATURES =========")
+        # print("indices=",features.indices)
+        # print("indptr=",features.indptr)
+        # print("data=",features.data)
+        # print("==== FEATURE PAIR ====")
+        # print(extract_pairs(features.indices, features.indptr, features.data))
+        # print("======== LABELS =========")
+        # print("indices=",labels.indices)
+        # print("indptr=",labels.indptr)
+        # print("data=",labels.data)
+        # print("==== LABELS PAIR ====")
+        # print(extract_pairs(features.indices, features.indptr, features.data))
+
+        # Creates and map the rust feature vectors from the numpy arrays
+        feature_indices = ffi.new("uint32_t[]", num_nnz_features)
+        feature_indptr = ffi.new("uint32_t[]", num_feature_rows+1)
+        feature_data = ffi.new("float[]", num_nnz_features)
+        feature_indices = ffi.from_buffer("uint32_t[]", features.indices)
+        feature_indptr = ffi.from_buffer("uint32_t[]", features.indptr)
+        feature_data = ffi.from_buffer("float[]", features.data)
+
+        # Creates and map the rust label vectors from the numpy arrays
+        label_indices = ffi.new("uint32_t[]", num_nnz_labels)
+        label_indptr = ffi.new("uint32_t[]", num_labels_rows+1)
+        label_data = ffi.new("uint32_t[]", num_nnz_labels)
+        label_indices = ffi.from_buffer("uint32_t[]", labels.indices)
+        label_indptr = ffi.from_buffer("uint32_t[]", labels.indptr)
+        label_data = ffi.from_buffer("uint32_t[]", labels.data)
+
+        dataset_ptr = lib.load_omikuji_data_set_from_features_labels(
+            num_features,
+            num_labels,
+            num_nnz_features,
+            num_nnz_labels,
+            num_feature_rows,
+            feature_indices,
+            feature_indptr,
+            feature_data,
+            label_indices,
+            label_indptr,
+            label_data,
+            thread_pool.ptr,
+        )
+        if dataset_ptr == ffi.NULL:
+            raise RuntimeError("Failed to pass data to Rust")
         dataset_ptr = ffi.gc(dataset_ptr, lib.free_omikuji_data_set)
 
         if hyper_param is None:
