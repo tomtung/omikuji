@@ -1,10 +1,11 @@
 use itertools::Itertools;
 use libc::size_t;
-use omikuji::rayon;
+use omikuji::{rayon, Index};
 use std::convert::TryInto;
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_float, c_void};
 use std::slice;
+use omikuji::{IndexSet, IndexValueVec};
 
 #[repr(C)]
 pub struct Model {
@@ -242,7 +243,7 @@ pub unsafe extern "C" fn load_omikuji_data_set(
         .and_then(|path| {
             maybe_run_with_thread_pool(thread_pool_ptr, || {
                 omikuji::DataSet::load_xc_repo_data_file(path)
-                    .map_err(|_| "Failed to laod data file")
+                    .map_err(|_| "Failed to load data file")
             })
         }) {
         Ok(dataset) => Box::into_raw(Box::new(dataset)) as *mut DataSet,
@@ -251,6 +252,113 @@ pub unsafe extern "C" fn load_omikuji_data_set(
             std::ptr::null_mut()
         }
     }
+}
+
+pub fn extract_pairs<T: Copy>(indices: &Vec<u32>, indptr: &Vec<u32>, data: &Vec<T>) -> Vec<(u32, T)> {
+    let mut pairs: Vec<(u32, T)> = Vec::with_capacity(data.len()); // Preallocate memory
+    
+    for row in 0..indptr.len() - 1 {
+        let start = indptr[row] as usize;
+        let end = indptr[row + 1] as usize;
+        
+        for i in start..end {
+            pairs.push((indices[i], data[i]));
+        }
+    }
+    pairs
+}
+
+
+pub fn extract_label_sets(indices: &Vec<u32>, indptr: &Vec<u32>, data: &Vec<u32>) -> Vec<IndexSet> {
+    let mut label_sets: Vec<IndexSet> = Vec::with_capacity(indptr.len() - 1); // Preallocate memory for label_sets
+
+    for row in 0..indptr.len() - 1 {
+        let start = indptr[row] as usize;
+        let end = indptr[row + 1] as usize;
+
+        let mut label_set: IndexSet = IndexSet::with_capacity(end - start); // Preallocate memory for label_set
+        
+        // Iterate directly over non-zero elements
+        for (&index, &value) in indices[start..end].iter().zip(&data[start..end]) {
+            if value != 0 {
+                label_set.insert(index);
+            }
+        }
+        label_sets.push(label_set);
+    }
+    label_sets
+}
+
+
+#[no_mangle]
+pub unsafe extern "C" fn load_omikuji_data_set_from_features_labels(
+    num_features: size_t,
+    num_labels: size_t,
+    num_nnz_features: size_t,
+    num_nnz_labels: size_t,
+    num_rows: size_t,
+    feature_indices: * const u32,
+    feature_indptr: * const u32,
+    feature_data: * const c_float,
+    label_indices: * const u32,
+    label_indptr: * const u32,
+    label_data: *const u32,
+    thread_pool_ptr: *const ThreadPool,
+) -> *mut DataSet {
+
+    // features
+    let vec_feature_indices = {
+        slice::from_raw_parts(feature_indices, num_nnz_features).iter().cloned().collect_vec()
+    };
+    let vec_feature_indptr = {
+        slice::from_raw_parts(feature_indptr, num_rows+1).iter().cloned().collect_vec()
+    };
+    let vec_feature_data = {
+        slice::from_raw_parts(feature_data, num_nnz_features).iter().cloned().collect_vec()
+    };
+    // labels
+    let vec_labels_indices = {
+        slice::from_raw_parts(label_indices, num_nnz_labels).iter().cloned().collect_vec()
+    };
+    let vec_labels_indptr = {
+        slice::from_raw_parts(label_indptr, num_rows+1).iter().cloned().collect_vec()
+    };
+    let vec_labels_data = {
+        slice::from_raw_parts(label_data, num_nnz_labels).iter().cloned().collect_vec()
+    };
+
+    let features_list: Vec<IndexValueVec> = vec_feature_indptr
+    .windows(2)
+    .map(|window| {
+        let start = window[0] as usize;
+        let end = window[1] as usize;
+        extract_pairs(
+            &vec_feature_indices[start..end].to_vec(),
+            &vec![0, (end - start).try_into().unwrap()],
+            &vec_feature_data[start..end].to_vec(),
+        )
+    })
+    .collect();
+
+    let label_sets: Vec<IndexSet> = extract_label_sets(&vec_labels_indices, &vec_labels_indptr, &vec_labels_data);
+
+    // // For debugging purpose
+    // println!("features_list={:?}", features_list);
+    // println!("labels_set={:?}", label_sets);
+
+    // println!("==== RUST Features ====");
+    // println!("indices={:?}", vec_feature_indices);
+    // println!("indptr={:?}", vec_feature_indptr);
+    // println!("data={:?}", vec_feature_data);
+
+    // println!("==== RUST Labels ====");
+    // println!("indices={:?}", vec_labels_indices);
+    // println!("indptr={:?}", vec_labels_indptr);
+    // println!("data={:?}", vec_labels_data);
+    
+    // Construct the DataSet and return a raw pointer
+    let dataset = maybe_run_with_thread_pool(thread_pool_ptr, || {omikuji::DataSet::from_x_y(num_features, num_labels, features_list, label_sets).map_err(|_| "Failed passing data to Rust")});
+    return Box::into_raw(Box::new(dataset)) as *mut DataSet;
 }
 
 /// Free data set object.
