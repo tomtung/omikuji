@@ -41,14 +41,9 @@ jobs:
           rustup -V
           cargo -V
 
-      - name: Instal nextest
-        uses: taiki-e/install-action@d438492cf8a250514fa2d34b30bc3c0dc37c65ff # v2.87.8
-        with:
-          tool: nextest
-
       - name: Run tests
         run: |
-          cargo nextest run --target ${{ matrix.target.triple }} --workspace -F cli --no-fail-fast
+          cargo test --target ${{ matrix.target.triple }} --workspace -F cli --no-fail-fast
           cargo test --target ${{ matrix.target.triple }} --doc --workspace -F cli --no-fail-fast
 
       - name: Run example
