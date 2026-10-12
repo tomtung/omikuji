@@ -3,7 +3,7 @@ name = "omikuji_c-api"
 version = "0.5.2"
 edition = "2024"
 authors = ["Tom Dong <tom.tung.dyb@gmail.com>"]
-rust-version = "1.80.1"
+rust-version = "1.85.0"
 
 [lib]
 name = "omikuji"
