@@ -10,7 +10,7 @@ documentation = "https://docs.rs/omikuji"
 keywords = ["machine-learning", "multi-label", "classification", "xmc"]
 readme = "README.md"
 exclude = ["examples/"]
-rust-version = "1.85.0"
+rust-version = "1.85.1"
 
 [dependencies]
 const-default = "1.0.*"
