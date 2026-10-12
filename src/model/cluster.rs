@@ -1,6 +1,6 @@
 use crate::mat_util::*;
 use const_default::ConstDefault;
-use itertools::{izip, Itertools};
+use itertools::{Itertools, izip};
 use ndarray::{Array2, ArrayView2, ArrayViewMut2, Axis, ScalarOperand, ShapeBuilder};
 use num_traits::Float;
 use order_stat::kth;

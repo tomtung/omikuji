@@ -1,4 +1,4 @@
-use std::io::{stderr, Stderr};
+use std::io::{Stderr, stderr};
 
 pub(crate) type ProgressBar = pbr::ProgressBar<Stderr>;
 

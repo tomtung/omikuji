@@ -1,7 +1,7 @@
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use const_default::ConstDefault;
-use omikuji::model::liblinear::LossType;
 use omikuji::model::TrainHyperParam;
+use omikuji::model::liblinear::LossType;
 use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::path::PathBuf;
