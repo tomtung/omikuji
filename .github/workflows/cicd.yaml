@@ -43,8 +43,9 @@ jobs:
 
       - name: Run tests
         run: |
-          cargo test --target ${{ matrix.target.triple }} --workspace -F cli --no-fail-fast
-          cargo test --target ${{ matrix.target.triple }} --doc --workspace -F cli --no-fail-fast
+          cargo test --target ${{ matrix.target.triple }} --no-fail-fast -F cli
+          cargo test --target ${{ matrix.target.triple }} --no-fail-fast --manifest-path c-api/Cargo.toml
+          cargo test --target ${{ matrix.target.triple }} --no-fail-fast -F cli --doc
 
       - name: Run example
         run: |
