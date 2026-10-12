@@ -183,66 +183,58 @@ impl TreeTrainer {
         // and also successfully performed clustering, then recursively branch and train subtrees
         if depth < self.hyper_param.max_depth
             && label_cluster.len() >= self.hyper_param.min_branch_size
+            && let Some(mut label_clusters) = label_cluster.split(self.hyper_param.cluster)
         {
-            if let Some(mut label_clusters) = label_cluster.split(self.hyper_param.cluster) {
-                drop(label_cluster); // No longer needed
-                assert!(label_clusters.len() > 1);
+            drop(label_cluster); // No longer needed
+            assert!(label_clusters.len() > 1);
 
-                // Continue clustering within each sub-cluster, effectively
-                // collapsing adjacent layers
-                for _ in 0..self.hyper_param.collapse_every_n_layers {
-                    let prev_len = label_clusters.len();
-                    label_clusters = label_clusters
-                        .into_par_iter()
-                        .flat_map(|sub_cluster| {
-                            if sub_cluster.len() >= self.hyper_param.min_branch_size {
-                                if let Some(sub_sub_clusters) =
-                                    sub_cluster.split(self.hyper_param.cluster)
-                                {
-                                    return sub_sub_clusters;
-                                }
-                            }
-                            // Return without further clustering if it's too small or
-                            // fails to split
-                            vec![sub_cluster]
-                        })
-                        .collect();
-
-                    // Break early if no more sub-clusters were created
-                    if label_clusters.len() == prev_len {
-                        break;
-                    }
-                }
-
-                self.progress_bar.lock().unwrap().total += label_clusters.len() as u64;
-
-                let example_index_lists = label_clusters
-                    .par_iter()
-                    .map(|cluster| examples.find_examples_with_labels(&cluster.labels))
-                    .collect::<Vec<_>>();
-
-                let (children, weights) = rayon::join(
-                    {
-                        let examples = examples.clone();
-                        || {
-                            self.train_child_nodes(
-                                depth,
-                                examples,
-                                label_clusters,
-                                &example_index_lists,
-                            )
+            // Continue clustering within each sub-cluster, effectively
+            // collapsing adjacent layers
+            for _ in 0..self.hyper_param.collapse_every_n_layers {
+                let prev_len = label_clusters.len();
+                label_clusters = label_clusters
+                    .into_par_iter()
+                    .flat_map(|sub_cluster| {
+                        if sub_cluster.len() >= self.hyper_param.min_branch_size
+                            && let Some(sub_sub_clusters) =
+                                sub_cluster.split(self.hyper_param.cluster)
+                        {
+                            return sub_sub_clusters;
                         }
-                    },
-                    || {
-                        self.train_classifier(
-                            examples, // NB: the Arc "examples" is moved into this closure
-                            &example_index_lists,
-                        )
-                    },
-                );
 
-                return TreeNode::Branch { weights, children };
+                        // Return without further clustering if it's too small or
+                        // fails to split
+                        vec![sub_cluster]
+                    })
+                    .collect();
+
+                // Break early if no more sub-clusters were created
+                if label_clusters.len() == prev_len {
+                    break;
+                }
             }
+
+            self.progress_bar.lock().unwrap().total += label_clusters.len() as u64;
+
+            let example_index_lists = label_clusters
+                .par_iter()
+                .map(|cluster| examples.find_examples_with_labels(&cluster.labels))
+                .collect::<Vec<_>>();
+
+            let (children, weights) = rayon::join(
+                {
+                    let examples = examples.clone();
+                    || self.train_child_nodes(depth, examples, label_clusters, &example_index_lists)
+                },
+                || {
+                    self.train_classifier(
+                        examples, // NB: the Arc "examples" is moved into this closure
+                        &example_index_lists,
+                    )
+                },
+            );
+
+            return TreeNode::Branch { weights, children };
         }
 
         // Otherwise stop branching and train a leaf node

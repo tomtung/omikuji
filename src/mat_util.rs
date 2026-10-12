@@ -499,7 +499,7 @@ impl LilMat {
 
         // When either the matrix is empty, or the last outer index is strictly less than
         // the new one, we are appending to a new outer index.
-        if self.outer_inds.last().map_or(true, |&i| i < outer_ind) {
+        if self.outer_inds.last().is_none_or(|&i| i < outer_ind) {
             self.outer_inds.push(outer_ind);
             self.indptr.push(self.inner_inds.len());
         } else {

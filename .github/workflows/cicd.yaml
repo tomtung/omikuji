@@ -55,37 +55,36 @@ jobs:
           cd examples
           bash run_cli.sh
 
-  rust-build:
+  rust-lint:
     runs-on: ubuntu-latest
+    needs: rust-test
     steps:
-      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8  # v6.0.1
+      - name: Checkout repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
       - name: Install Rust
+        uses: dtolnay/rust-toolchain@7e38f4b43b4db5c8dd498af069a4f6196df1d067 # master
+        with:
+          toolchain: nightly
+          components:
+            - rustfmt
+            - clippy
+
+      - name: Run rustfmt
         run: |
-          set -e
-          curl https://sh.rustup.rs -sSf | sh -s -- -y
-          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
-      - name: Install rustfmt
-        run: rustup component add rustfmt
-      - name: Query Rust and Cargo versions
+          cargo fmt --all --check
+
+      - name: Run rustfmt (c-api)
         run: |
-          rustup -V
-          rustup component list --installed
-          cargo -V
-      - name: Cargo test
-        run: |
-          set -e -x
-          cargo fmt --all -- --check
-          cargo test --features cli
           cd c-api
-          cargo fmt --all -- --check
-          cargo test
-      - name: Run example
+          cargo fmt --all --check
+
+      - name: Run clippy
         run: |
-          set -e -x
-          cargo install --path . --features cli --locked
-          omikuji --help
-          cd examples
-          bash run_cli.sh
+          cargo clippy --all-features -- -D warnings
+          
 
   python-sdist:
     runs-on: ubuntu-latest
@@ -323,7 +322,13 @@ jobs:
           retention-days: 1
 
   publish-to-pypi:
-    needs: [rust-build, python-sdist, python-manylinux, python-windows, python-macos]
+    needs:
+      - rust-test
+      - rust-lint
+      - python-sdist
+      - python-manylinux
+      - python-windows
+      - python-macos
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     environment:

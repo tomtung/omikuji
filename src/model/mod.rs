@@ -41,7 +41,7 @@ impl Model {
     /// # Arguments
     ///
     /// * `feature_vec` - An input vector for prediction, assumed to be ordered by indices and have
-    /// no duplicate or out-of-range indices
+    ///   no duplicate or out-of-range indices
     /// * `beam_size` - Beam size for beam search.
     pub fn predict(&self, feature_vec: &[(Index, f32)], beam_size: usize) -> IndexValueVec {
         let feature_vec = self.prepare_feature_vec(feature_vec);
@@ -128,12 +128,8 @@ impl Model {
             }
         } else {
             let writer = std::io::BufWriter::new(std::fs::File::create(settings_path)?);
-            serde_json::to_writer_pretty(writer, &self.settings).map_err(|e| {
-                io::Error::new(
-                    io::ErrorKind::Other,
-                    format!("Unable to serialize settings: {}", e),
-                )
-            })?;
+            serde_json::to_writer_pretty(writer, &self.settings)
+                .map_err(|e| io::Error::other(format!("Unable to serialize settings: {e}")))?;
         }
 
         let index_to_tree_path =
@@ -152,12 +148,8 @@ impl Model {
 
             info!("Saving tree to {}", tree_path.display());
             let writer = std::io::BufWriter::new(std::fs::File::create(tree_path)?);
-            serde_cbor::to_writer(writer, tree).map_err(|e| {
-                io::Error::new(
-                    io::ErrorKind::Other,
-                    format!("Unable to serialize tree: {}", e),
-                )
-            })?;
+            serde_cbor::to_writer(writer, tree)
+                .map_err(|e| io::Error::other(format!("Unable to serialize tree: {e}")))?;
             curr_index += 1;
         }
 
