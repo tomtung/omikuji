@@ -1,11 +1,11 @@
-use super::{cluster, liblinear, Model, Settings, TreeNode};
+use super::{Model, Settings, TreeNode, cluster, liblinear};
 use crate::data::DataSet;
 use crate::mat_util::*;
-use crate::util::{create_progress_bar, ProgressBar};
+use crate::util::{ProgressBar, create_progress_bar};
 use crate::{Index, IndexSet, IndexValueVec};
 use const_default::ConstDefault;
 use hashbrown::HashMap;
-use itertools::{izip, Itertools};
+use itertools::{Itertools, izip};
 use log::info;
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};

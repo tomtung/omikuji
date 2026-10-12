@@ -368,7 +368,7 @@ where
 {
     if let Some((i, &v)) = arr
         .indexed_iter()
-        .max_by_key(|(_, &l)| NotNan::new(l).unwrap())
+        .max_by_key(|&(_, &l)| NotNan::new(l).unwrap())
     {
         Some((v, i))
     } else {

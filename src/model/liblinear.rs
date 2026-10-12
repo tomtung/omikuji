@@ -4,7 +4,6 @@ use itertools::Itertools;
 use rand::prelude::*;
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
-use std::f32::{INFINITY, NEG_INFINITY};
 use std::ops::Deref;
 
 /// The loss function used by liblinear model.
@@ -191,7 +190,7 @@ fn solve_l2r_l2_svc(
 
     // PG: projected gradient, for shrinking and stopping
     let mut pg: f32;
-    let mut pgmax_old = INFINITY;
+    let mut pgmax_old = f32::INFINITY;
     let mut pgmax_new: f32;
     let mut pgmin_new: f32;
 
@@ -211,8 +210,8 @@ fn solve_l2r_l2_svc(
     let mut iter = 0;
     let mut rng = thread_rng();
     while iter < max_iter {
-        pgmax_new = NEG_INFINITY;
-        pgmin_new = INFINITY;
+        pgmax_new = f32::NEG_INFINITY;
+        pgmin_new = f32::INFINITY;
 
         index.shuffle(&mut rng);
 
@@ -265,13 +264,13 @@ fn solve_l2r_l2_svc(
                 break;
             } else {
                 active_size = l;
-                pgmax_old = INFINITY;
+                pgmax_old = f32::INFINITY;
                 continue;
             }
         }
         pgmax_old = pgmax_new;
         if pgmax_old <= 0. {
-            pgmax_old = INFINITY;
+            pgmax_old = f32::INFINITY;
         }
     }
 

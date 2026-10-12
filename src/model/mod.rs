@@ -264,17 +264,13 @@ enum TreeNode {
 impl TreeNode {
     fn is_valid(&self, settings: Settings) -> bool {
         match self {
-            TreeNode::Branch {
-                ref weights,
-                ref children,
-            } => {
+            TreeNode::Branch { weights, children } => {
                 weights.shape() == (settings.n_features + 1, children.len())
                     && children.iter().all(|c| c.is_valid(settings))
             }
-            TreeNode::Leaf {
-                ref weights,
-                ref labels,
-            } => weights.shape() == (settings.n_features + 1, labels.len()),
+            TreeNode::Leaf { weights, labels } => {
+                weights.shape() == (settings.n_features + 1, labels.len())
+            }
         }
     }
 
@@ -290,18 +286,13 @@ impl TreeNode {
         }
 
         match self {
-            TreeNode::Branch {
-                ref mut weights,
-                ref mut children,
-            } => {
+            TreeNode::Branch { weights, children } => {
                 densify(weights, max_sparse_density);
                 children
                     .par_iter_mut()
                     .for_each(|child| child.densify_weights(max_sparse_density));
             }
-            TreeNode::Leaf {
-                ref mut weights, ..
-            } => {
+            TreeNode::Leaf { weights, .. } => {
                 densify(weights, max_sparse_density);
             }
         }
