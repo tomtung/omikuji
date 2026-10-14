@@ -125,6 +125,7 @@ impl DataSet {
             .skip(1)
             .map(|line| Self::parse_xc_repo_data_line(line, n_features))
             .collect::<Result<_>>()?;
+
         let (feature_lists, label_sets): (Vec<_>, Vec<_>) = lines.into_iter().unzip();
 
         if n_examples != feature_lists.len() {
@@ -143,6 +144,19 @@ impl DataSet {
             n_examples,
             start_t.elapsed().as_secs_f32()
         );
+        Ok(Self {
+            n_features,
+            n_labels,
+            feature_lists,
+            label_sets,
+        })
+    }
+//feature_lists: Vec<IndexValueVec>
+    pub fn from_x_y(n_features: usize, n_labels: usize, feature_lists: Vec<IndexValueVec>, label_sets: Vec<IndexSet>) -> Result<Self> 
+    {
+        info!("Total number of features {}", n_features);
+        info!("Total number of labels {}", n_labels);
+        info!("Num rows {}", feature_lists.len());
         Ok(Self {
             n_features,
             n_labels,
